@@ -3,6 +3,7 @@
 Admins manage their own school; superadmins manage every school. Every write is
 recorded in the append-only audit_log.
 """
+from datetime import timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
@@ -14,10 +15,13 @@ from app.db import get_conn
 from app.engines.scoring.rules import CURRENT_VERSION
 from app.errors import ApiError
 from app.imports import parse_fixtures, parse_squads
+from app.live import lineup_entries, stream_scores, tallies
 from app.matches import assert_open, load_match
-from app.schemas import LineupIn, RolesIn, SchoolIn, ScorersIn, TournamentIn
+from app.schemas import ConfirmIn, LineupIn, PostponeIn, ReopenIn, RolesIn, SchoolIn, ScorersIn, TournamentIn
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+DISPUTE_HOLD = timedelta(hours=24)   # PRD K1: payouts wait 24h after confirmation
 
 # Most athletes a side can start (volleyball: six on court plus the libero).
 MAX_STARTERS = {"football": 11, "basketball": 5, "volleyball": 7}
@@ -189,11 +193,134 @@ def assign_scorers(match_id: UUID, body: ScorersIn, user=Depends(require_admin),
                            (body.user_ids, m["school_id"])).fetchall()
     if len(scorers) != len(body.user_ids):
         raise ApiError(422, "not_scorers", "every scorer needs the scorer role at this school")
+    if conn.execute("select 1 from stat_events where match_id = %s", (match_id,)).fetchone():
+        raise ApiError(409, "scoring_started", "scorers can't be changed once events are recorded")
     conn.execute("delete from match_scorers where match_id = %s", (match_id,))
-    for uid in body.user_ids:
-        conn.execute("insert into match_scorers (match_id, user_id) values (%s, %s)", (match_id, uid))
+    # The first scorer is primary: their stream drives live points.
+    for uid, role in zip(body.user_ids, ("primary", "secondary")):
+        conn.execute("insert into match_scorers (match_id, user_id, role) values (%s, %s, %s)",
+                     (match_id, uid, role))
     audit(conn, user["id"], "match.assign_scorers", "match", match_id, scorers=body.user_ids)
     return {"match_id": match_id, "scorers": body.user_ids}
+
+
+def _admin_match(conn, user, match_id) -> dict:
+    m = load_match(conn, match_id, published_only=False)
+    _guard_school(user, m["school_id"])
+    conn.execute("select id from matches where id = %s for update", (match_id,))
+    return m
+
+
+@router.get("/matches/{match_id}/reconcile")
+def reconcile(match_id: UUID, user=Depends(require_admin), conn=Depends(get_conn)):
+    """Side-by-side scorer streams: every tally or points difference, plus reported scores."""
+    m = _admin_match(conn, user, match_id)
+    scorers = conn.execute(
+        """select s.user_id, s.role, u.team_name, x.home_score, x.away_score, x.shootout_winner,
+                  x.submitted_at
+           from match_scorers s join users u on u.id = s.user_id
+           left join stat_submissions x on x.match_id = s.match_id and x.scorer_id = s.user_id
+           where s.match_id = %s order by s.role""", (match_id,)).fetchall()
+    names = {str(r["athlete_id"]): r["display_name"] for r in lineup_entries(conn, m)}
+    streams = {}
+    for s in scorers:
+        streams[s["role"]] = {"tallies": tallies(conn, match_id, s["user_id"]),
+                              "points": {a: sc.points for a, sc in stream_scores(conn, m, s["user_id"]).items()}}
+    mismatches, point_diffs = [], []
+    if len(streams) == 2:
+        p, q = streams["primary"], streams["secondary"]
+        for key in sorted(set(p["tallies"]) | set(q["tallies"])):
+            if p["tallies"][key] != q["tallies"][key]:
+                mismatches.append({"athlete_id": key[0], "athlete": names.get(key[0]), "event_type": key[1],
+                                   "primary": p["tallies"][key], "secondary": q["tallies"][key]})
+        for a in sorted(names):
+            if p["points"].get(a) != q["points"].get(a):
+                point_diffs.append({"athlete_id": a, "athlete": names[a],
+                                    "primary": p["points"].get(a), "secondary": q["points"].get(a)})
+    reported = {(s["home_score"], s["away_score"], s["shootout_winner"]) for s in scorers if s["submitted_at"]}
+    return {
+        "match_id": match_id, "status": m["status"],
+        "scorers": [{k: s[k] for k in ("user_id", "role", "team_name", "home_score", "away_score",
+                                         "shootout_winner", "submitted_at")} for s in scorers],
+        "event_mismatches": mismatches, "points_differences": point_diffs,
+        "agreed": len(scorers) == 2 and all(s["submitted_at"] for s in scorers)
+                  and not mismatches and not point_diffs and len(reported) == 1,
+    }
+
+
+@router.post("/matches/{match_id}/reopen")
+def reopen_submission(match_id: UUID, body: ReopenIn, user=Depends(require_admin), conn=Depends(get_conn)):
+    m = _admin_match(conn, user, match_id)
+    if m["status"] not in ("live", "final_pending"):
+        raise ApiError(409, "cannot_reopen", f"this match is {m['status']}")
+    gone = conn.execute("delete from stat_submissions where match_id = %s and scorer_id = %s returning id",
+                        (match_id, body.scorer_id)).fetchone()
+    if gone is None:
+        raise ApiError(404, "no_submission", "that scorer hasn't submitted this match")
+    conn.execute("update matches set status = 'live' where id = %s", (match_id,))
+    audit(conn, user["id"], "match.reopen_submission", "match", match_id, scorer_id=body.scorer_id)
+    return {"match_id": match_id, "status": "live"}
+
+
+@router.post("/matches/{match_id}/confirm")
+def confirm_result(match_id: UUID, body: ConfirmIn, user=Depends(require_admin), conn=Depends(get_conn),
+                   now=Depends(utcnow)):
+    m = _admin_match(conn, user, match_id)
+    if m["status"] != "final_pending":
+        raise ApiError(409, "not_ready", "every assigned scorer must submit before the result is confirmed")
+    if not conn.execute("select 1 from stat_submissions where match_id = %s and scorer_id = %s",
+                        (match_id, body.official_scorer_id)).fetchone():
+        raise ApiError(422, "not_official_scorer", "the official stream must come from an assigned scorer "
+                                                   "who has submitted")
+    if body.home_score == body.away_score:
+        winner = "draw"
+    else:
+        winner = "home" if body.home_score > body.away_score else "away"
+    if body.shootout_winner and winner != "draw":
+        raise ApiError(422, "shootout_needs_draw", "a shoot-out winner only applies to a drawn match")
+    if winner == "draw" and m["sport"] != "football":
+        raise ApiError(422, "no_draws", f"{m['sport']} matches can't end in a draw")
+    conn.execute(
+        """insert into match_results (match_id, home_score, away_score, winner, shootout_winner, confirmed_by,
+                                      confirmed_at, official_scorer_id)
+           values (%s, %s, %s, %s, %s, %s, %s, %s)""",
+        (match_id, body.home_score, body.away_score, winner, body.shootout_winner, user["id"], now,
+         body.official_scorer_id),
+    )
+    conn.execute("update matches set status = 'confirmed' where id = %s", (match_id,))
+    audit(conn, user["id"], "match.confirm", "match", match_id, score=f"{body.home_score}-{body.away_score}",
+          official_scorer_id=body.official_scorer_id)
+    return {"match_id": match_id, "status": "confirmed", "winner": winner, "shootout_winner": body.shootout_winner,
+            "confirmed_at": now, "payout_after": now + DISPUTE_HOLD}
+
+
+@router.post("/matches/{match_id}/abandon")
+def abandon(match_id: UUID, user=Depends(require_admin), conn=Depends(get_conn)):
+    m = _admin_match(conn, user, match_id)
+    if m["status"] in ("confirmed", "abandoned"):
+        raise ApiError(409, "cannot_abandon", f"this match is already {m['status']}")
+    conn.execute("update matches set status = 'abandoned' where id = %s", (match_id,))
+    audit(conn, user["id"], "match.abandon", "match", match_id, previous_status=m["status"])
+    return {"match_id": match_id, "status": "abandoned"}
+
+
+@router.post("/matches/{match_id}/postpone")
+def postpone(match_id: UUID, body: PostponeIn, user=Depends(require_admin), conn=Depends(get_conn),
+             now=Depends(utcnow)):
+    """With new_start: reschedule (teams unlock until then). Without: hold as postponed (locked)."""
+    m = _admin_match(conn, user, match_id)
+    if m["status"] not in ("scheduled", "lineup_out", "postponed"):
+        raise ApiError(409, "cannot_postpone", f"a {m['status']} match can't be postponed; abandon it instead")
+    if body.new_start is not None and body.new_start <= now:
+        raise ApiError(422, "start_in_past", "the new start must be in the future")
+    status = "postponed" if body.new_start is None else ("lineup_out" if m["status"] == "lineup_out" else "scheduled")
+    conn.execute(
+        """update matches set status = %s, scheduled_start = coalesce(%s, scheduled_start),
+                  original_start = coalesce(original_start, scheduled_start) where id = %s""",
+        (status, body.new_start, match_id),
+    )
+    audit(conn, user["id"], "match.postpone", "match", match_id, new_start=body.new_start)
+    return {"match_id": match_id, "status": status, "scheduled_start": body.new_start or m["scheduled_start"]}
 
 
 @router.post("/users/{user_id}/roles")

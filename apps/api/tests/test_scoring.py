@@ -62,6 +62,17 @@ def test_clean_sheet_needs_60_percent_and_counts_only_goals_while_on_pitch():
     assert p["def50"] == 4           # 50 minutes < 54: no clean sheet, no concede
 
 
+def test_live_clean_sheet_only_after_enough_minutes_played():
+    lu = lineup(("gk", "home", "GK", True), ("striker", "away", "FWD", True))
+    at = lambda m: MatchContext(FOOTBALL, "home", "away", 90, elapsed_minutes=m)  # noqa: E731
+    assert points(at(1), lu, [])["gk"] == 4                 # minute 1: no clean sheet yet
+    assert points(at(53), lu, [])["gk"] == 4                # 53 < 54 (60% of 90)
+    assert points(at(54), lu, [])["gk"] == 24               # provisional clean sheet
+    assert points(at(70), lu, events(("striker", "goal", 65)))["gk"] == 4 - 2   # lost on conceding
+    # a late event minute beyond the wall clock still counts as time played
+    assert points(at(10), lu, events(("gk", "save", 60)))["gk"] == 4 + 6 + 20
+
+
 def test_substitute_gets_two_and_short_stint_has_no_clean_sheet():
     lu = lineup(("sub", "home", "DEF", False), ("bench", "home", "MID", False))
     evs = events(("sub", "sub_on", 70))

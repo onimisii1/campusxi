@@ -46,14 +46,30 @@ python -m venv .venv
 .venv/Scripts/python -m uvicorn app.main:app --reload
 ```
 
-Routes so far (Phase 2):
+Routes so far (Phases 2–3):
 
 | Area | Routes |
 |---|---|
-| Lobby | `GET /sports`, `/schools`, `/tournaments`, `/tournaments/{id}`, `/matches`, `/matches/{id}` |
+| Lobby | `GET /sports`, `/schools`, `/tournaments`, `/tournaments/{id}`, `/matches`, `/matches/{id}`, `/matches/{id}/live` |
 | Profile | `POST /me` (team name, school, 18+ date of birth), `GET /me` |
-| Team builder | `POST /matches/{id}/teams`, `PUT /teams/{id}`, `GET /me/teams` |
-| Admin | `POST /admin/tournaments`, `.../{id}/squads` (CSV), `.../{id}/fixtures` (CSV), `.../{id}/publish`, `POST /admin/matches/{id}/lineup`, `.../scorers`, `POST /admin/users/{id}/roles`, `POST /admin/schools` |
+| Team builder | `POST /matches/{id}/teams`, `PUT /teams/{id}`, `GET /me/teams`, `GET /teams/{id}/breakdown` |
+| Scorer | `GET /scorer/matches`, `GET /scorer/matches/{id}`, `POST /scorer/matches/{id}/events`, `POST /scorer/matches/{id}/submit` |
+| Admin setup | `POST /admin/tournaments`, `.../{id}/squads` (CSV), `.../{id}/fixtures` (CSV), `.../{id}/publish`, `POST /admin/matches/{id}/lineup`, `.../scorers`, `POST /admin/users/{id}/roles`, `POST /admin/schools` |
+| Admin results | `GET /admin/matches/{id}/reconcile`, `POST /admin/matches/{id}/confirm`, `.../reopen`, `.../abandon`, `.../postpone` |
+
+### Scoring workflow
+
+1. An admin assigns one or two scorers. The first is **primary**: their stream drives live points.
+2. Scoring opens 30 minutes before kick-off once the line-up is published. The first event
+   makes the match `live`, which locks fantasy teams.
+3. Events are append-only and idempotent by `client_seq`: resending is harmless, undo is a new
+   reversing event. Each event in a batch is accepted, a duplicate, or rejected with a reason.
+4. Each scorer submits their final score; when all have, the match is `final_pending`.
+5. The admin compares the streams (`/reconcile`), can reopen a submission for fixes, then
+   confirms the result and names the official stream. Payouts wait 24 hours after that.
+
+Live clean sheets only count minutes actually played, so they appear (provisionally) once a
+defender has been on the pitch for 60% of the match and disappear if their side concedes.
 
 CSV formats (UTF-8, header row required; see `supabase/seed/` for examples):
 
@@ -80,8 +96,28 @@ npm install
 npm run dev
 ```
 
+The scorer app is at `#/scorer`. It keeps working offline: every tap is saved on the phone
+first and sent when the connection returns, and the last-seen matches reopen without signal.
+
+Sign-in uses Supabase email one-time codes. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+(see `apps/web/.env.example`), and make sure the Supabase "Magic Link" email template includes
+`{{ .Token }}` so users receive a code rather than only a link.
+
+### Local scorer testing (no Supabase needed)
+
+```bash
+cd apps/api
+.venv/Scripts/python scripts/dev_seed.py
+```
+
+This starts a local Postgres (in `apps/api/.devdb`), creates a demo match 10 minutes from now
+with two scorers assigned, and prints `DATABASE_URL`, `SUPABASE_JWT_SECRET` and sign-in tokens.
+Run the API with those two variables set, start the web app, open `#/scorer`, and paste a scorer
+token into the development sign-in.
+
 ## Build status
 
 - Phase 0 (foundation) and Phase 1 (engines): done.
 - Phase 2 (data model, admin setup, team builder API): done.
-- Next: Phase 3, the scorer app (live event entry, offline queue, dual-scorer reconciliation).
+- Phase 3 (scorer API and app, live points, reconciliation, confirmation): done.
+- Next: Phase 4, the fan app and free pilot (lobby, team builder UI, free contests, leaderboards).

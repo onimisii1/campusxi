@@ -37,6 +37,9 @@ class MatchContext:
     away_team_id: str
     scheduled_minutes: int
     rules_version: str | None = None
+    # Minutes played so far while the match is live; None once it has finished.
+    # Time-based awards (clean sheets) only count minutes actually played.
+    elapsed_minutes: int | None = None
 
     @property
     def rules(self) -> ScoringRules:
@@ -106,15 +109,21 @@ def score_match(ctx: MatchContext, lineup, events) -> dict:
 
 def _football_defence(ctx, rules, entry, mine, evs, by_id, score):
     start = 0 if entry.started else min(e.minute for e in mine if e.type == "sub_on")
-    match_end = max([ctx.scheduled_minutes] + [e.minute for e in evs if e.minute is not None])
+    last_minute = max([0] + [e.minute for e in evs if e.minute is not None])
+    if ctx.elapsed_minutes is None:
+        match_end = max(ctx.scheduled_minutes, last_minute)
+    else:
+        match_end = max(ctx.elapsed_minutes, last_minute)
     exits = [e.minute for e in mine if e.type in ("sub_off", "red") and e.minute >= start]
-    end = min(exits) if exits else match_end
+    exit_minute = min(exits) if exits else None
+    end = exit_minute if exit_minute is not None else match_end
 
     # Goals against this athlete's team: opponents' goals plus own team's own goals.
+    # Still on the pitch: every goal from their start counts. Gone: only goals before leaving.
     against = [e.minute for e in evs
                if (e.type == "goal" and by_id[e.athlete_id].team_id != entry.team_id)
                or (e.type == "own_goal" and by_id[e.athlete_id].team_id == entry.team_id)]
-    conceded_on_pitch = sum(1 for m in against if start <= m < end)
+    conceded_on_pitch = sum(1 for m in against if m >= start and (exit_minute is None or m < exit_minute))
 
     if entry.position in rules.goal_conceded_positions and conceded_on_pitch:
         score.add(f"Goals conceded on pitch ×{conceded_on_pitch}",

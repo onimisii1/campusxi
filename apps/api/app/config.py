@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     jwt_audience: str = "authenticated"
     # Match-result bets are sports betting: off until a sports-betting licence is held.
     result_bets_enabled: bool = False
+    # Browser origins allowed to call the API (comma-separated in the environment).
+    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5180"]
 
 
 settings = Settings()

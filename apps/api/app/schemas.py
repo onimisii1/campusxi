@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -35,6 +35,21 @@ class ScorersIn(BaseModel):
 
 class RolesIn(BaseModel):
     roles: list[Literal["player", "scorer", "admin", "superadmin"]]
+
+
+class ReopenIn(BaseModel):
+    scorer_id: UUID
+
+
+class ConfirmIn(BaseModel):
+    home_score: int = Field(ge=0)
+    away_score: int = Field(ge=0)
+    shootout_winner: Literal["home", "away"] | None = None
+    official_scorer_id: UUID
+
+
+class PostponeIn(BaseModel):
+    new_start: datetime | None = None
 
 
 class PickIn(BaseModel):

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from app.clock import utcnow
 from app.db import get_conn
 from app.errors import ApiError
+from app.live import lineup_entries, official_or_primary_scorer, stream_scores
 from app.matches import MATCH_SQL, is_locked, load_match, squad
 
 router = APIRouter(tags=["lobby"])
@@ -68,6 +69,26 @@ def list_matches(sport: str | None = None, status: str | None = None, tournament
         {"sport": sport, "status": status, "tid": tournament_id},
     ).fetchall()
     return [_card(m, now) for m in rows]
+
+
+@router.get("/matches/{match_id}/live")
+def live_points(match_id: UUID, conn=Depends(get_conn), now=Depends(utcnow)):
+    """Athlete points with explanations (PRD F1, F2): primary stream while live, official once confirmed."""
+    m = load_match(conn, match_id)
+    scorer = official_or_primary_scorer(conn, m)
+    scores = stream_scores(conn, m, scorer, now)
+    side = {m["home_team_id"]: "home", m["away_team_id"]: "away"}
+    athletes = [{
+        "id": r["athlete_id"], "name": r["display_name"], "position": r["position"], "side": side[r["team_id"]],
+        "points": scores[str(r["athlete_id"])].points,
+        "breakdown": [{"label": label, "points": pts} for label, pts in scores[str(r["athlete_id"])].breakdown],
+    } for r in lineup_entries(conn, m)]
+    athletes.sort(key=lambda a: (-a["points"], a["name"]))
+    result = conn.execute("select home_score, away_score, winner, shootout_winner from match_results "
+                          "where match_id = %s", (match_id,)).fetchone()
+    return {"match_id": match_id, "status": m["status"],
+            "source": "official" if m["status"] == "confirmed" else ("primary_scorer" if scorer else None),
+            "result": result, "athletes": athletes}
 
 
 @router.get("/matches/{match_id}")
