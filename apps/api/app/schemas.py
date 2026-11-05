@@ -1,0 +1,46 @@
+from datetime import date
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+
+class ProfileIn(BaseModel):
+    school_id: UUID
+    team_name: str = Field(min_length=3, max_length=30, pattern=r"^[A-Za-z0-9_ .-]+$")
+    dob: date
+
+
+class SchoolIn(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+
+
+class TournamentIn(BaseModel):
+    school_id: UUID
+    sport: str
+    name: str = Field(min_length=2, max_length=120)
+    match_minutes: int = Field(ge=0, le=200, description="Scheduled length; 0 for untimed sports")
+    starts_on: date | None = None
+    ends_on: date | None = None
+
+
+class LineupIn(BaseModel):
+    starters: list[UUID] = Field(min_length=1)
+    bench: list[UUID] = []
+
+
+class ScorersIn(BaseModel):
+    user_ids: list[UUID] = Field(min_length=1, max_length=2)
+
+
+class RolesIn(BaseModel):
+    roles: list[Literal["player", "scorer", "admin", "superadmin"]]
+
+
+class PickIn(BaseModel):
+    athlete_id: UUID
+    role: Literal["none", "captain", "vice_captain", "key"] = "none"
+
+
+class TeamIn(BaseModel):
+    picks: list[PickIn] = Field(min_length=1, max_length=20)

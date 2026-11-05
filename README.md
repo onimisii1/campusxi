@@ -10,24 +10,69 @@ The full product spec is in [`docs/prd/CampusXI_PRD.docx`](docs/prd/CampusXI_PRD
 
 | Path | Contents |
 |---|---|
-| `apps/api/` | FastAPI backend |
-| `apps/api/app/engines/scoring/` | Per-sport scoring from stat events, team validation, multipliers |
-| `apps/api/app/engines/payouts/` | Prize tables (40% fee, top 40% paid), tie splits, minimum fill |
-| `apps/api/app/engines/p2p/` | Fantasy H2H and Home/Away bet quotes and settlement |
-| `apps/api/tests/` | Golden tests from the PRD's worked examples |
+| `supabase/migrations/` | Schema (PRD section 7): append-only guards, balanced-ledger check, RLS on every table |
+| `supabase/seed/` | Example squad and fixture CSVs in the import format |
+| `apps/api/app/engines/` | Scoring, payout and P2P engines (pure Python, no I/O) |
+| `apps/api/app/routers/` | FastAPI routes: lobby, profile, team builder, admin setup |
+| `apps/api/tests/` | Engine golden tests + integration tests against a real Postgres |
 | `apps/web/` | React + TypeScript + Vite PWA shell |
 | `docs/prd/` | PRD and the reference script that generated its numbers |
 
-## Running the API tests
+## Database
+
+Migrations are plain SQL, applied with the Supabase CLI:
+
+```bash
+supabase link --project-ref <project-ref>
+supabase db push
+```
+
+Key guarantees enforced by Postgres itself, not just the API:
+
+- `stat_events`, `p2p_bet_events`, `wallet_ledger`, `audit_log` reject UPDATE, DELETE and TRUNCATE.
+- Every `wallet_ledger` transaction must sum to zero at commit.
+- A P2P bet's matched amount can never exceed its stake; stakes start at ₦1,000.
+- Every user is 18+; team names are unique regardless of case.
+- Row Level Security is on for every table with no policies, so Supabase's public API can't read them.
+
+## API
+
+Copy `apps/api/.env.example` to `apps/api/.env` and fill in the Supabase values, then:
 
 ```bash
 cd apps/api
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements-dev.txt   # Windows; use .venv/bin/python elsewhere
+.venv/Scripts/python -m uvicorn app.main:app --reload
+```
+
+Routes so far (Phase 2):
+
+| Area | Routes |
+|---|---|
+| Lobby | `GET /sports`, `/schools`, `/tournaments`, `/tournaments/{id}`, `/matches`, `/matches/{id}` |
+| Profile | `POST /me` (team name, school, 18+ date of birth), `GET /me` |
+| Team builder | `POST /matches/{id}/teams`, `PUT /teams/{id}`, `GET /me/teams` |
+| Admin | `POST /admin/tournaments`, `.../{id}/squads` (CSV), `.../{id}/fixtures` (CSV), `.../{id}/publish`, `POST /admin/matches/{id}/lineup`, `.../scorers`, `POST /admin/users/{id}/roles`, `POST /admin/schools` |
+
+CSV formats (UTF-8, header row required; see `supabase/seed/` for examples):
+
+- Squads: `team,athlete,position`. Positions: football GK/DEF/MID/FWD; basketball G/F/C; volleyball S/OH/OPP/MB/L.
+- Fixtures: `home_team,away_team,scheduled_start,venue`. Times without an offset are read as Lagos time.
+
+An import with any bad row is rejected whole, with every problem listed by row number.
+
+## Tests
+
+```bash
+cd apps/api
 .venv/Scripts/python -m pytest -q
 ```
 
-## Running the web app
+Integration tests need Postgres. They use `TEST_DATABASE_URL` if set (CI uses a Postgres 16
+service); otherwise the `pgserver` dev dependency starts a throwaway local server.
+
+## Web app
 
 ```bash
 cd apps/web
@@ -37,5 +82,6 @@ npm run dev
 
 ## Build status
 
-Phase 0 (foundation) and Phase 1 (engines and golden tests) of the PRD roadmap.
-Next is Phase 2: the Supabase data model from PRD section 7 and the admin setup.
+- Phase 0 (foundation) and Phase 1 (engines): done.
+- Phase 2 (data model, admin setup, team builder API): done.
+- Next: Phase 3, the scorer app (live event entry, offline queue, dual-scorer reconciliation).
