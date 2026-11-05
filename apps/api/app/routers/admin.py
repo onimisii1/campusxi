@@ -17,7 +17,9 @@ from app.errors import ApiError
 from app.imports import parse_fixtures, parse_squads
 from app.live import lineup_entries, stream_scores, tallies
 from app.matches import assert_open, load_match
+from app.routers.contests import create_free_contest
 from app.schemas import ConfirmIn, LineupIn, PostponeIn, ReopenIn, RolesIn, SchoolIn, ScorersIn, TournamentIn
+from app.settlement import settle_free, void_match
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -142,12 +144,13 @@ async def import_fixtures(tournament_id: UUID, request: Request, user=Depends(re
                and scheduled_start = %s""", (t["id"], teams[home], teams[away], start)).fetchone()
         if exists:
             continue
-        conn.execute(
+        match_id = conn.execute(
             """insert into matches (tournament_id, home_team_id, away_team_id, venue, scheduled_start,
                                     scheduled_minutes, rules_version)
-               values (%s, %s, %s, %s, %s, %s, %s)""",
+               values (%s, %s, %s, %s, %s, %s, %s) returning id""",
             (t["id"], teams[home], teams[away], venue, start, t["match_minutes"], CURRENT_VERSION[t["sport"]]),
-        )
+        ).fetchone()["id"]
+        create_free_contest(conn, match_id)   # every match gets a free contest for the pilot
         created += 1
     audit(conn, user["id"], "tournament.import_fixtures", "tournament", t["id"], matches_created=created)
     return {"matches_created": created, "skipped_existing": len(rows) - created}
@@ -288,6 +291,7 @@ def confirm_result(match_id: UUID, body: ConfirmIn, user=Depends(require_admin),
          body.official_scorer_id),
     )
     conn.execute("update matches set status = 'confirmed' where id = %s", (match_id,))
+    settle_free(conn, m, body.official_scorer_id, now)
     audit(conn, user["id"], "match.confirm", "match", match_id, score=f"{body.home_score}-{body.away_score}",
           official_scorer_id=body.official_scorer_id)
     return {"match_id": match_id, "status": "confirmed", "winner": winner, "shootout_winner": body.shootout_winner,
@@ -300,6 +304,7 @@ def abandon(match_id: UUID, user=Depends(require_admin), conn=Depends(get_conn))
     if m["status"] in ("confirmed", "abandoned"):
         raise ApiError(409, "cannot_abandon", f"this match is already {m['status']}")
     conn.execute("update matches set status = 'abandoned' where id = %s", (match_id,))
+    void_match(conn, match_id)
     audit(conn, user["id"], "match.abandon", "match", match_id, previous_status=m["status"])
     return {"match_id": match_id, "status": "abandoned"}
 

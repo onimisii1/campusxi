@@ -1,11 +1,16 @@
 """Lobby reads (PRD 8.2): sports, schools, published tournaments and matches."""
+from collections import defaultdict
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
+from app.auth import optional_user
 from app.clock import utcnow
 from app.db import get_conn
+from app.engines.payouts import final_ranks
 from app.errors import ApiError
+from app.fantasy import team_totals
 from app.live import lineup_entries, official_or_primary_scorer, stream_scores
 from app.matches import MATCH_SQL, is_locked, load_match, squad
 
@@ -43,6 +48,37 @@ def get_tournament(tournament_id: UUID, conn=Depends(get_conn)):
     t["teams"] = conn.execute("select id, name from teams where tournament_id = %s order by name",
                               (tournament_id,)).fetchall()
     return t
+
+
+@router.get("/tournaments/{tournament_id}/leaderboard")
+def season_leaderboard(tournament_id: UUID, user=Depends(optional_user), conn=Depends(get_conn)):
+    """Free season-long leaderboard (PRD F3): each player's best team score per confirmed match, summed."""
+    t = conn.execute("select id, name, sport from tournaments where id = %s and status = 'published'",
+                     (tournament_id,)).fetchone()
+    if t is None:
+        raise ApiError(404, "tournament_not_found", "tournament not found")
+    totals, matches_played = defaultdict(Decimal), defaultdict(int)
+    confirmed = conn.execute("select id from matches where tournament_id = %s and status = 'confirmed'",
+                             (tournament_id,)).fetchall()
+    for row in confirmed:
+        m = load_match(conn, row["id"])
+        scores = stream_scores(conn, m, official_or_primary_scorer(conn, m))
+        teams = conn.execute("select id, user_id from fantasy_teams where match_id = %s", (m["id"],)).fetchall()
+        team_pts = team_totals(conn, scores, [r["id"] for r in teams])
+        best = {}
+        for r in teams:
+            best[r["user_id"]] = max(best.get(r["user_id"], team_pts[r["id"]]), team_pts[r["id"]])
+        for uid, pts in best.items():
+            totals[uid] += pts
+            matches_played[uid] += 1
+    names = {r["id"]: r["team_name"] for r in conn.execute(
+        "select id, team_name from users where id = any(%s)", (list(totals),)).fetchall()}
+    ranks = final_ranks(list(totals.items()))
+    rows = [{"rank": ranks[uid], "team_name": names[uid], "points": pts, "matches": matches_played[uid],
+             "is_me": bool(user and uid == user["id"])} for uid, pts in totals.items()]
+    rows.sort(key=lambda r: (r["rank"], r["team_name"].lower()))
+    return {"tournament_id": tournament_id, "name": t["name"], "sport": t["sport"],
+            "matches_confirmed": len(confirmed), "entries": rows}
 
 
 def _card(m, now):

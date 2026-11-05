@@ -223,12 +223,251 @@ label {
   align-items: flex-start;
   gap: 4px;
   width: 100%;
+  box-sizing: border-box;
   text-align: left;
   background: var(--tile);
   border: 0;
   border-radius: 12px;
   padding: 14px;
   margin-bottom: 10px;
+}
+
+/* ---------- fan app ---------- */
+
+header.top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+header.top h1 {
+  font-size: 1.5rem;
+}
+
+header.top nav {
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.95rem;
+  min-width: 0;
+}
+
+header.top nav .muted {
+  max-width: 9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.block {
+  display: block;
+}
+
+.plain {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+code {
+  word-break: break-all;
+  font-size: 0.8rem;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+.chip {
+  flex: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+
+.chip.on {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+a.match-card {
+  color: inherit;
+  text-decoration: none;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--line);
+  margin: 8px 0 12px;
+  overflow-x: auto;
+}
+
+.tab {
+  flex: 1;
+  background: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  padding: 10px 6px;
+  white-space: nowrap;
+}
+
+.tab.on {
+  border-bottom-color: var(--brand);
+  font-weight: 600;
+}
+
+.primary.narrow {
+  width: auto;
+  padding: 10px 16px;
+}
+
+.primary.as-button {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+label.inline {
+  flex-direction: row;
+  align-items: center;
+}
+
+label.inline input {
+  width: auto;
+}
+
+.counters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  padding: 8px 0;
+  z-index: 1;
+}
+
+.counters span {
+  font-size: 0.8rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--tile);
+}
+
+.counters .ok {
+  color: var(--good);
+}
+
+.counters .over {
+  color: var(--bad);
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  background: var(--tile);
+  border: 2px solid transparent;
+}
+
+.pick.on {
+  border-color: var(--brand);
+}
+
+.pick-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: none;
+  border: 0;
+  padding: 10px;
+  text-align: left;
+}
+
+.pick-main:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pick-main small {
+  color: var(--muted);
+}
+
+.roles {
+  display: flex;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.role {
+  min-width: 40px;
+  min-height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.role.on {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.save-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.save-bar ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+
+table.board {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.board th,
+table.board td {
+  text-align: left;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+table.board th:last-child,
+table.board td:last-child {
+  text-align: right;
+}
+
+table.board tr.me {
+  background: var(--tile);
+  font-weight: 600;
 }
 
 /* ---------- scorer ---------- */

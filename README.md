@@ -46,13 +46,15 @@ python -m venv .venv
 .venv/Scripts/python -m uvicorn app.main:app --reload
 ```
 
-Routes so far (Phases 2–3):
+Routes so far (Phases 2–4):
 
 | Area | Routes |
 |---|---|
-| Lobby | `GET /sports`, `/schools`, `/tournaments`, `/tournaments/{id}`, `/matches`, `/matches/{id}`, `/matches/{id}/live` |
+| Lobby | `GET /sports`, `/schools`, `/tournaments`, `/tournaments/{id}`, `/tournaments/{id}/leaderboard`, `/matches`, `/matches/{id}`, `/matches/{id}/live` |
 | Profile | `POST /me` (team name, school, 18+ date of birth), `GET /me` |
 | Team builder | `POST /matches/{id}/teams`, `PUT /teams/{id}`, `GET /me/teams`, `GET /teams/{id}/breakdown` |
+| Contests | `GET /matches/{id}/contests`, `POST /contests/{id}/entries`, `DELETE /entries/{id}`, `GET /contests/{id}/leaderboard`, `POST /admin/matches/{id}/contests` |
+| Challenges | `POST /bets`, `GET /matches/{id}/bets`, `GET /bets/invite/{token}`, `POST /bets/{id}/fills`, `POST /bets/{id}/cancel`, `GET /me/bets` |
 | Scorer | `GET /scorer/matches`, `GET /scorer/matches/{id}`, `POST /scorer/matches/{id}/events`, `POST /scorer/matches/{id}/submit` |
 | Admin setup | `POST /admin/tournaments`, `.../{id}/squads` (CSV), `.../{id}/fixtures` (CSV), `.../{id}/publish`, `POST /admin/matches/{id}/lineup`, `.../scorers`, `POST /admin/users/{id}/roles`, `POST /admin/schools` |
 | Admin results | `GET /admin/matches/{id}/reconcile`, `POST /admin/matches/{id}/confirm`, `.../reopen`, `.../abandon`, `.../postpone` |
@@ -70,6 +72,16 @@ Routes so far (Phases 2–3):
 
 Live clean sheets only count minutes actually played, so they appear (provisionally) once a
 defender has been on the pitch for 60% of the match and disappear if their side concedes.
+
+### Free pilot (Phase 4)
+
+- Every imported match gets a free contest automatically (1,000 spots, up to 10 teams per player);
+  admins can add more with sponsor prize text. Leaderboards are live from kick-off.
+- Free head-to-head challenges: post on the match's open board or share a link. The creator's
+  team stays hidden until kick-off.
+- Confirming a result records final contest ranks and challenge results; abandoning voids them.
+- The season table adds up each player's best team from every confirmed match.
+- Paid entry and stakes are switched off (`PAID_PLAY_ENABLED=false`) until Phase 5.
 
 CSV formats (UTF-8, header row required; see `supabase/seed/` for examples):
 
@@ -96,6 +108,8 @@ npm install
 npm run dev
 ```
 
+The fan app is the default route: lobby, match pages (contests, your teams, live points,
+challenges), team builder, leaderboards, season tables and challenge invite links.
 The scorer app is at `#/scorer`. It keeps working offline: every tap is saved on the phone
 first and sent when the connection returns, and the last-seen matches reopen without signal.
 
@@ -110,14 +124,18 @@ cd apps/api
 .venv/Scripts/python scripts/dev_seed.py
 ```
 
-This starts a local Postgres (in `apps/api/.devdb`), creates a demo match 10 minutes from now
-with two scorers assigned, and prints `DATABASE_URL`, `SUPABASE_JWT_SECRET` and sign-in tokens.
-Run the API with those two variables set, start the web app, open `#/scorer`, and paste a scorer
-token into the development sign-in.
+This starts a local Postgres (in `apps/api/.devdb`), applies any new migrations, creates a demo
+match 20 minutes from now (`KICKOFF_IN_MINUTES` to change) with two scorers assigned, and prints
+`DATABASE_URL`, `SUPABASE_JWT_SECRET` and sign-in tokens for an admin, two scorers, two fans and a
+newcomer with no profile. Run the API with those two variables set, start the web app, and paste
+a token into the development sign-in (`#/signin`, or `#/scorer` for scorers). `--reset` wipes the
+local database first.
 
 ## Build status
 
 - Phase 0 (foundation) and Phase 1 (engines): done.
 - Phase 2 (data model, admin setup, team builder API): done.
 - Phase 3 (scorer API and app, live points, reconciliation, confirmation): done.
-- Next: Phase 4, the fan app and free pilot (lobby, team builder UI, free contests, leaderboards).
+- Phase 4 (fan app and free pilot: contests, leaderboards, free challenges, season table): done.
+- Next: the pilot itself (needs a Supabase project and a school sports week), then Phase 5
+  (KYC, wallet, paid contests), which is gated on the licence and school approval.

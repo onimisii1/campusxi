@@ -54,6 +54,17 @@ def current_user(identity: Identity = Depends(current_identity), conn=Depends(ge
     return user
 
 
+def optional_user(creds: HTTPAuthorizationCredentials | None = Depends(_bearer), conn=Depends(get_conn)):
+    """The signed-in user's profile if there is one; public pages work without it."""
+    if creds is None:
+        return None
+    try:
+        claims = decode_token(creds.credentials)
+        return conn.execute("select * from users where id = %s", (UUID(claims["sub"]),)).fetchone()
+    except (ApiError, jwt.PyJWTError, KeyError, ValueError):
+        return None
+
+
 def require_roles(*roles: str):
     def dependency(user: dict = Depends(current_user)) -> dict:
         if not set(roles) & set(user["roles"]):

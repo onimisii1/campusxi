@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { devTokenMode, sendCode, setDevToken, supabase, verifyCode } from '../auth'
 
-export default function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
+export default function SignIn({ onSignedIn, title = 'Sign in' }: { onSignedIn: () => void; title?: string }) {
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [sent, setSent] = useState(false)
@@ -24,8 +24,8 @@ export default function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   if (devTokenMode) {
     return (
       <form className="card" onSubmit={(e) => { e.preventDefault(); setDevToken(token); onSignedIn() }}>
-        <h2>Scorer sign-in (development)</h2>
-        <p className="muted">Supabase isn't configured, so paste an API token for a scorer account.</p>
+        <h2>{title} (development)</h2>
+        <p className="muted">Supabase isn't configured, so paste an API token from scripts/dev_seed.py.</p>
         <textarea value={token} onChange={(e) => setToken(e.target.value)} rows={4} required aria-label="API token" />
         <button className="primary" type="submit">Continue</button>
       </form>
@@ -52,7 +52,8 @@ export default function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
         })
       }}
     >
-      <h2>Scorer sign-in</h2>
+      <h2>{title}</h2>
+      <p className="muted">We'll email you a one-time code. No password needed.</p>
       <label>
         Email
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={sent} />
