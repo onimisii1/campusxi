@@ -1,0 +1,12 @@
+{
+  "name": "CampusXI",
+  "short_name": "CampusXI",
+  "description": "Campus fantasy sports and P2P challenges",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0C447C",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
