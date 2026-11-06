@@ -127,6 +127,28 @@ def live_points(match_id: UUID, conn=Depends(get_conn), now=Depends(utcnow)):
             "result": result, "athletes": athletes}
 
 
+@router.get("/matches/{match_id}/summary")
+def match_summary(match_id: UUID, user=Depends(optional_user), conn=Depends(get_conn), now=Depends(utcnow)):
+    """Home-card numbers: your best team's points, the average and the highest (best team per player)."""
+    m = load_match(conn, match_id)
+    teams = conn.execute("select id, user_id from fantasy_teams where match_id = %s", (match_id,)).fetchall()
+    me = user["id"] if user else None
+    out = {"match_id": match_id, "status": m["status"], "players": len({t["user_id"] for t in teams}),
+           "teams": len(teams), "my_teams": sum(1 for t in teams if t["user_id"] == me),
+           "my_points": None, "average": None, "highest": None}
+    if m["status"] not in ("live", "final_pending", "confirmed") or not teams:
+        return out
+    scores = stream_scores(conn, m, official_or_primary_scorer(conn, m), now)
+    totals = team_totals(conn, scores, [t["id"] for t in teams])
+    best = {}
+    for t in teams:
+        best[t["user_id"]] = max(best.get(t["user_id"], totals[t["id"]]), totals[t["id"]])
+    out["average"] = (sum(best.values()) / len(best)).quantize(Decimal("0.1"))
+    out["highest"] = max(best.values())
+    out["my_points"] = best.get(me)
+    return out
+
+
 @router.get("/matches/{match_id}")
 def get_match(match_id: UUID, conn=Depends(get_conn), now=Depends(utcnow)):
     m = load_match(conn, match_id)

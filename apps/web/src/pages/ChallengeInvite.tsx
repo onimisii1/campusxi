@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api'
+import PageHeader from '../components/PageHeader'
 import { kickoff } from '../format'
 import { go, signInThenReturn } from '../router'
 import { useSession } from '../session'
@@ -36,7 +37,9 @@ export default function ChallengeInvite({ token: inviteToken }: { token: string 
   }
 
   return (
-    <section className="card">
+    <section>
+      <PageHeader title="Challenge" back="#/" />
+      <div className="card">
       <h2>{creator.team_name} challenged you</h2>
       <p>{match.home_team} vs {match.away_team} · {kickoff(match.scheduled_start)}</p>
       <p className="muted">Their record: {creator.record.won}W {creator.record.lost}L {creator.record.tied}T.
@@ -61,6 +64,7 @@ export default function ChallengeInvite({ token: inviteToken }: { token: string 
         </>
       )}
       {msg && <p className="error">{msg}</p>}
+      </div>
     </section>
   )
 }

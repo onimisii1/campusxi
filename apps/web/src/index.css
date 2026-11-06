@@ -23,12 +23,26 @@
 body {
   margin: 0;
   min-height: 100vh;
+  background: var(--page);
+}
+
+:root {
+  --page: #f4f3ef;
+  --hero-a: #0c447c;
+  --hero-b: #0f7c8c;
+  --hero-c: #19a68f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #0d0f12;
+  }
 }
 
 .shell {
   max-width: 480px;
   margin: 0 auto;
-  padding: 24px 16px;
+  padding: 12px 16px 32px;
 }
 
 h1 {
@@ -578,4 +592,546 @@ table.board tr.me {
 .log li.undone span {
   text-decoration: line-through;
   color: var(--muted);
+}
+
+/* ---------- app shell (redesign) ---------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 10px 16px;
+  background: var(--page);
+}
+
+.wordmark {
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.round-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 1.2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.round-btn.ghost {
+  visibility: hidden;
+}
+
+.round-btn.menu {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.round-btn.menu span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 16px;
+}
+
+.page-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.page-header p {
+  margin: 0;
+}
+
+/* sport slider: a segmented control */
+.slider {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  background: var(--brand);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.slider::-webkit-scrollbar {
+  display: none;
+}
+
+.seg {
+  flex: 1 0 auto;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.seg.on {
+  background: #fff;
+  color: var(--brand);
+}
+
+.seg:disabled {
+  color: rgba(255, 255, 255, 0.4);
+  cursor: default;
+}
+
+/* the gradient match card */
+.hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  padding: 18px 16px 16px;
+  margin-bottom: 18px;
+  color: #fff;
+  background:
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.05) 0 2px, transparent 2px 22px),
+    linear-gradient(140deg, var(--hero-a) 0%, var(--hero-b) 58%, var(--hero-c) 100%);
+  box-shadow: 0 8px 24px rgba(12, 68, 124, 0.25);
+}
+
+.hero-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #fff;
+  text-decoration: none;
+}
+
+.hero-title strong {
+  font-size: 1.3rem;
+  line-height: 1.25;
+}
+
+.hero-title .vs {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.hero hr {
+  width: 40%;
+  margin: 14px auto;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.pill-live {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #e53935;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1fr;
+  align-items: end;
+  text-align: center;
+}
+
+.stats div {
+  display: flex;
+  flex-direction: column;
+}
+
+.stats b {
+  font-size: 1.8rem;
+  line-height: 1.1;
+}
+
+.stats .main b {
+  font-size: 3rem;
+}
+
+.stats span {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.deadline {
+  margin: 0 0 14px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.deadline .small {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.pills {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pills a {
+  display: block;
+  padding: 12px;
+  border-radius: 999px;
+  background: rgba(10, 30, 60, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.pills a:active {
+  background: rgba(10, 30, 60, 0.55);
+}
+
+.row-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.sides h4 {
+  margin: 4px 0;
+  font-size: 0.9rem;
+}
+
+/* chips and toggles */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.chip-row .chip,
+span.chip {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+span.chip.ok {
+  color: var(--good);
+  border-color: var(--good);
+}
+
+.toggle {
+  display: inline-flex;
+  padding: 4px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: var(--tile);
+}
+
+.toggle button {
+  min-width: 90px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  font-weight: 600;
+}
+
+.toggle button.on {
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* pitch view */
+.pitch {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 14px;
+  min-height: 420px;
+  padding: 18px 6px;
+  border-radius: 16px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.35)) center 50% / 100% 2px no-repeat,
+    radial-gradient(circle at 50% 50%, transparent 54px, rgba(255, 255, 255, 0.35) 55px, rgba(255, 255, 255, 0.35) 57px, transparent 58px),
+    repeating-linear-gradient(180deg, #2f8f3e 0 44px, #2a8238 44px 88px);
+}
+
+.pitch.basketball {
+  background:
+    radial-gradient(circle at 50% 50%, transparent 54px, rgba(255, 255, 255, 0.5) 55px, rgba(255, 255, 255, 0.5) 57px, transparent 58px),
+    repeating-linear-gradient(90deg, #c98a4b 0 36px, #c2823f 36px 72px);
+}
+
+.pitch.volleyball {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.7)) center 50% / 100% 3px no-repeat,
+    linear-gradient(#e08b3a, #d97c2b);
+}
+
+.pitch-row {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pitch.mini {
+  min-height: 0;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px 4px;
+}
+
+.pitch.mini .player {
+  width: 62px;
+}
+
+.player {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 70px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+}
+
+.player .nameplate {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-top: -2px;
+  border-radius: 6px;
+  overflow: hidden;
+  text-align: center;
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.player .nameplate b {
+  padding: 1px 2px;
+  background: #fff;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player .nameplate small {
+  padding: 1px 2px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.player.empty .slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 2px dashed rgba(255, 255, 255, 0.8);
+  border-radius: 10px;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.player.empty .nameplate small {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.role-badge {
+  position: absolute;
+  top: -4px;
+  left: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  border: 2px solid #fff;
+}
+
+.role-badge.static {
+  position: static;
+}
+
+.picked-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.pool {
+  margin-top: 18px;
+}
+
+.pool-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.add {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.add:disabled {
+  background: var(--tile);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* bottom sheet for player options */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  box-sizing: border-box;
+  padding: 16px 16px 24px;
+  border-radius: 20px 20px 0 0;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-btn {
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  font-weight: 600;
+  text-align: left;
+}
+
+.sheet-btn.on {
+  border-color: var(--brand);
+}
+
+.sheet-btn.danger {
+  color: var(--bad);
+}
+
+/* profile menu */
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(140deg, var(--hero-a), var(--hero-b));
+}
+
+.profile-card .muted {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  flex: none;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  font-weight: 800;
+  font-size: 1.2rem;
+}
+
+.menu-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.menu-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.menu-list a,
+.menu-list button {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-decoration: none;
+  text-align: left;
+}
+
+.card {
+  background: var(--surface);
 }

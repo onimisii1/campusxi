@@ -185,6 +185,30 @@ def test_abandon_voids_contests_and_challenges(sw, client, db):
     assert db.execute("select status from p2p_bets").fetchone()["status"] == "void"
 
 
+# ---------- home card summary ----------
+
+def test_match_summary(sw, client, db):
+    mid, n = sw["match"]["id"], sw["names"]
+    rival = make_user(db, sw["school"], team_name="rival_fan")
+    _team(client, sw["player"], mid, valid_picks(n))                    # captain Engineering FWD 1
+    _team(client, sw["player"], mid, _variants(n, 4)[3])
+    _team(client, rival, mid, _variants(n, 4)[3])
+    before = client.get(f"/matches/{mid}/summary", headers=auth(sw["player"])).json()
+    assert (before["players"], before["teams"], before["my_teams"]) == (2, 3, 2)
+    assert before["my_points"] is None and before["average"] is None and before["highest"] is None
+
+    for s in (sw["s1"], sw["s2"]):
+        post(client, s, mid, ev(1, n["Engineering FWD 1"], "goal", 10))
+    mine = client.get(f"/matches/{mid}/summary", headers=auth(sw["player"])).json()
+    theirs = client.get(f"/matches/{mid}/summary", headers=auth(rival)).json()
+    teams = client.get("/me/teams", headers=auth(sw["player"])).json()
+    best = max(client.get(f"/teams/{t['id']}/breakdown", headers=auth(sw["player"])).json()["total_points"]
+               for t in teams)
+    assert mine["my_points"] == best == mine["highest"]
+    assert float(mine["average"]) == round((float(best) + float(theirs["my_points"])) / 2, 1)
+    assert client.get(f"/matches/{mid}/summary").json()["my_points"] is None   # signed out
+
+
 # ---------- season leaderboard ----------
 
 def test_season_leaderboard_counts_best_team_per_match(sw, client, db):

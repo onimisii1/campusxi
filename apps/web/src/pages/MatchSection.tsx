@@ -1,16 +1,21 @@
 import { useState } from 'react'
 import { api } from '../api'
 import MyBetRow, { type MyBet } from '../components/MyBetRow'
-import { countdown, kickoff, points, statusLabel } from '../format'
+import PageHeader from '../components/PageHeader'
+import Shirt from '../components/Shirt'
+import { kickoff, points, statusLabel } from '../format'
 import { signInThenReturn } from '../router'
+import { TEAM_RULES } from '../rules'
 import { useSession } from '../session'
+import { shortName, sideColours, teamCode } from '../teamStyle'
 import { errorText, useApi } from '../useApi'
 
 type Match = {
   id: string
+  sport: string
   tournament: string
-  home_team: { name: string }
-  away_team: { name: string }
+  home_team: { id: string; name: string }
+  away_team: { id: string; name: string }
   scheduled_start: string
   venue: string | null
   status: string
@@ -29,43 +34,38 @@ type Contest = {
   locked: boolean
   my_entries: { entry_id: string; fantasy_team_id: string; label: string; final_rank: number | null }[]
 }
-type Team = { id: string; label: string; picks: { display_name: string; role: string }[] }
-type Breakdown = { total_points: number; picks: { display_name: string; role: string; points: number }[] }
+type Pick = { athlete_id: string; display_name: string; role: string; position: string; team_id: string; points?: number }
+type Team = { id: string; label: string; picks: Pick[] }
+type Breakdown = { total_points: number; picks: Pick[] }
 type LiveAthlete = { id: string; name: string; position: string; side: string; points: number;
   breakdown: { label: string; points: number }[] }
 type Live = { source: string | null; result: { home_score: number; away_score: number } | null; athletes: LiveAthlete[] }
 type BoardBet = { id: string; creator: { team_name: string; record: { won: number; lost: number; tied: number } }; is_mine: boolean }
 
-const TABS = ['Contests', 'My teams', 'Live', 'Challenges'] as const
-type Tab = (typeof TABS)[number]
+// Each section of a match is its own page, reached from the match card's pill buttons.
+export const SECTIONS = {
+  teams: 'Pick Team',
+  contests: 'Contests',
+  challenges: 'Challenges',
+  live: 'Live points',
+} as const
+export type Section = keyof typeof SECTIONS
 
-export default function MatchPage({ matchId }: { matchId: string }) {
+export default function MatchSection({ matchId, section }: { matchId: string; section: Section }) {
   const { data: match, error } = useApi<Match>(`/matches/${matchId}`)
-  const [tab, setTab] = useState<Tab>('Contests')
 
   if (error) return <p className="error">{error}</p>
   if (!match) return <p className="muted">Loading…</p>
 
   return (
     <section>
-      <a href="#/">← Matches</a>
-      <p className="muted">{match.tournament} · {kickoff(match.scheduled_start)}{match.venue ? ` · ${match.venue}` : ''}</p>
-      <h2>{match.home_team.name} vs {match.away_team.name}</h2>
-      <p>
-        {match.locked
-          ? <span className="badge">{statusLabel(match.status)}</span>
-          : <span className="badge">{countdown(match.seconds_to_lock)}</span>}
-      </p>
-      <div className="tabs" role="tablist">
-        {TABS.map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'tab on' : 'tab'}
-            onClick={() => setTab(t)}>{t}</button>
-        ))}
-      </div>
-      {tab === 'Contests' && <ContestsTab match={match} />}
-      {tab === 'My teams' && <TeamsTab match={match} />}
-      {tab === 'Live' && <LiveTab match={match} />}
-      {tab === 'Challenges' && <ChallengesTab match={match} />}
+      <PageHeader title={section === 'teams' && match.locked ? 'My teams' : SECTIONS[section]} back={`#/match/${matchId}`}
+        subtitle={`${match.home_team.name} vs ${match.away_team.name} · ${
+          match.locked ? statusLabel(match.status) : `Deadline ${kickoff(match.scheduled_start)}`}`} />
+      {section === 'contests' && <ContestsTab match={match} />}
+      {section === 'teams' && <TeamsTab match={match} />}
+      {section === 'live' && <LiveTab match={match} />}
+      {section === 'challenges' && <ChallengesTab match={match} />}
     </section>
   )
 }
@@ -163,9 +163,14 @@ function TeamsTab({ match }: { match: Match }) {
   )
 }
 
+const BADGE: Record<string, string> = { captain: 'C', vice_captain: 'V', key: 'K' }
+
+/** A saved team on a small pitch; after kick-off each nameplate shows the player's points. */
 function TeamCard({ team, match }: { team: Team; match: Match }) {
   const { data: bd } = useApi<Breakdown>(match.locked ? `/teams/${team.id}/breakdown` : null)
-  const roleTag = (r: string) => ({ captain: ' (C)', vice_captain: ' (VC)', key: ' (K)' } as Record<string, string>)[r] ?? ''
+  const picks: Pick[] = bd?.picks ?? team.picks
+  const colours = sideColours(match.home_team.name, match.away_team.name)
+  const rules = TEAM_RULES[match.sport]
   return (
     <div className="card">
       <div className="row between">
@@ -173,9 +178,26 @@ function TeamCard({ team, match }: { team: Team; match: Match }) {
         {bd ? <strong>{points(bd.total_points)} pts</strong>
           : !match.locked && <a href={`#/build/${match.id}/${team.id}`}>Edit</a>}
       </div>
-      <p className="muted small">
-        {(bd?.picks ?? team.picks).map((p) => `${p.display_name}${roleTag(p.role)}${'points' in p ? ` ${points((p as { points: number }).points)}` : ''}`).join(' · ')}
-      </p>
+      <div className={`pitch mini ${match.sport}`}>
+        {rules.groups.map((g) => (
+          <div key={g.name} className="pitch-row">
+            {picks.filter((p) => g.positions.includes(p.position)).map((p) => {
+              const home = p.team_id === match.home_team.id
+              const name = home ? match.home_team.name : match.away_team.name
+              return (
+                <div key={p.athlete_id} className="player" aria-label={`${p.display_name}${p.points !== undefined ? `, ${points(p.points)} points` : ''}`}>
+                  {BADGE[p.role] && <span className="role-badge">{BADGE[p.role]}</span>}
+                  <Shirt colour={home ? colours.home : colours.away} size={34} />
+                  <span className="nameplate">
+                    <b>{shortName(p.display_name)}</b>
+                    <small>{p.points !== undefined ? points(p.points) : `${teamCode(name)} · ${p.position}`}</small>
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

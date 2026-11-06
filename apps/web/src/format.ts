@@ -3,6 +3,14 @@ export function kickoff(iso: string): string {
     hour: '2-digit', minute: '2-digit' })
 }
 
+/** "Fri 6 Nov at 19:30" */
+export function deadline(iso: string): string {
+  const d = new Date(iso)
+  const day = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  return `${day} at ${time}`
+}
+
 export function countdown(seconds: number): string {
   if (seconds <= 0) return 'Locked'
   const d = Math.floor(seconds / 86400)

@@ -155,5 +155,6 @@ def contest_leaderboard(contest_id: UUID, user=Depends(optional_user), conn=Depe
     rows = [{"rank": ranks[e["id"]], "entry_id": e["id"], "team_name": e["team_name"], "label": e["label"],
              "points": scored[e["id"]], "is_me": bool(user and e["user_id"] == user["id"])} for e in entries]
     rows.sort(key=lambda r: (r["rank"], r["team_name"].lower(), r["label"]))
-    return {"contest_id": contest_id, "name": contest["name"], "status": contest["status"], "source": source,
+    return {"contest_id": contest_id, "match_id": contest["match_id"], "name": contest["name"],
+            "status": contest["status"], "source": source,
             "match_status": m["status"], "entries": rows}

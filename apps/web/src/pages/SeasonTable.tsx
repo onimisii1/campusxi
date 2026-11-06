@@ -1,3 +1,4 @@
+import PageHeader from '../components/PageHeader'
 import { useApi } from '../useApi'
 import { Table } from './ContestBoard'
 
@@ -13,8 +14,7 @@ export default function SeasonTable({ tournamentId }: { tournamentId: string }) 
   if (!data) return <p className="muted">Loading…</p>
   return (
     <section>
-      <a href="#/">← Matches</a>
-      <h2>{data.name}</h2>
+      <PageHeader title={data.name} back="#/" subtitle="Season table" />
       <p className="muted">Season table: your best team from each finished match, added up.
         {' '}{data.matches_confirmed} match{data.matches_confirmed === 1 ? '' : 'es'} counted so far.</p>
       <Table rows={data.entries.map((e) => ({ key: e.team_name, rank: e.rank, name: e.team_name, points: e.points,

@@ -11,6 +11,9 @@ dist/
 # Local dev database (scripts/dev_seed.py)
 .devdb/
 
+# Raw source material (photos of squads, fixtures, etc.): may hold personal data, never commit
+data/
+
 # Env and local
 .env
 .env.*

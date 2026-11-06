@@ -1,7 +1,9 @@
+import PageHeader from '../components/PageHeader'
 import { points } from '../format'
 import { useApi } from '../useApi'
 
 type Board = {
+  match_id: string
   name: string
   status: string
   source: 'live' | 'final' | 'not_started'
@@ -16,8 +18,7 @@ export default function ContestBoard({ contestId }: { contestId: string }) {
   if (!data) return <p className="muted">Loading…</p>
   return (
     <section>
-      <button className="link" onClick={() => history.back()}>← Back</button>
-      <h2>{data.name}</h2>
+      <PageHeader title={data.name} back={`#/match/${data.match_id}/contests`} subtitle="Leaderboard" />
       <div className="row between">
         <span className="muted">{SOURCE[data.source]}</span>
         {data.source === 'live' && <button className="link" onClick={reload}>Refresh</button>}

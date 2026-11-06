@@ -1,5 +1,6 @@
 import { api } from '../api'
 import MyBetRow, { type MyBet } from '../components/MyBetRow'
+import PageHeader from '../components/PageHeader'
 import { signInThenReturn } from '../router'
 import { useSession } from '../session'
 import { useApi } from '../useApi'
@@ -24,7 +25,7 @@ export default function MyChallenges() {
 
   return (
     <section>
-      <h2>Your challenges</h2>
+      <PageHeader title="My challenges" back="#/me" />
       <p className="muted">Record: {won}W {lost}L {tied}T</p>
       {data?.length === 0 && <p className="muted">No challenges yet. Open a match and challenge someone.</p>}
       <ul className="plain">{data?.map((b) => <MyBetRow key={b.id} b={b} onCancel={cancel} showMatch />)}</ul>
