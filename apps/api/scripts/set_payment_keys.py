@@ -1,8 +1,8 @@
 """Add or change the payment keys in apps/api/.env, then check they work.
 
-    cd apps/api
-    .venv/Scripts/python scripts/set_payment_keys.py          # add / change keys (asks, input hidden)
-    .venv/Scripts/python scripts/set_payment_keys.py --check  # only check the keys already saved
+    Windows: double-click apps/api/set-payment-keys.cmd (or run it with --check)
+    PowerShell, from apps/api:  .\.venv\Scripts\python.exe scripts\set_payment_keys.py [--check]
+    Bash, from apps/api:        .venv/Scripts/python scripts/set_payment_keys.py [--check]
 
 Keys are typed with hidden input and saved only to apps/api/.env (gitignored); they are never
 printed in full. Press Enter at any question to keep what's already saved.
