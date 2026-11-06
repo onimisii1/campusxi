@@ -61,6 +61,16 @@ class KnockoutIn(BaseModel):
     venue: str | None = Field(default=None, max_length=120)
 
 
+class TournamentPatch(BaseModel):
+    match_minutes: int = Field(ge=0, le=200)
+
+
+class AthletePatch(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=60)
+    position: str | None = Field(default=None, max_length=20)
+    active: bool | None = None
+
+
 class PostponeIn(BaseModel):
     new_start: datetime | None = None
 

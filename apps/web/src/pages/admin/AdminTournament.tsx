@@ -8,7 +8,7 @@ import { useToast } from '../../toast'
 import { errorText, useApi } from '../../useApi'
 import { matchLabel, nextStep, STATUS_LABEL, type AdminMatch, type AdminMatches } from './adminTypes'
 
-const TABS = ['Matches', 'Imports', 'Knockouts'] as const
+const TABS = ['Matches', 'Squads', 'Imports', 'Knockouts'] as const
 type Tab = (typeof TABS)[number]
 
 export default function AdminTournament({ tournamentId }: { tournamentId: string }) {
@@ -27,6 +27,8 @@ export default function AdminTournament({ tournamentId }: { tournamentId: string
         ))}
       </div>
       {tab === 'Matches' && <Matches data={data} />}
+      {tab === 'Squads' && <Squads tournamentId={t.id} />}
+      {tab === 'Imports' && <MatchLength tournamentId={t.id} minutes={t.match_minutes} onDone={reload} />}
       {tab === 'Imports' && <Imports tournamentId={t.id} published={t.status === 'published'} onDone={reload} />}
       {tab === 'Knockouts' && <Knockouts tournamentId={t.id} published={t.status === 'published'} onDone={reload} />}
     </section>
@@ -63,7 +65,7 @@ function MatchRow({ m, tournamentId }: { m: AdminMatch; tournamentId: string }) 
         <div className="row between">
           <strong>{matchLabel(m)}</strong>
           {m.home_score !== null
-            ? <strong>{m.home_score}–{m.away_score}{m.walkover ? ' (w/o)' : ''}</strong>
+            ? <strong>{m.walkover ? 'Walkover · voided' : `${m.home_score}–${m.away_score}`}</strong>
             : <span className={`badge ${m.status === 'live' ? 'bad' : ''}`}>{STATUS_LABEL[m.status] ?? m.status}</span>}
         </div>
         <div className="row between small muted">
@@ -198,5 +200,79 @@ function Knockouts({ tournamentId, published, onDone }: { tournamentId: string; 
         <button className="primary" disabled={!form.home || !form.away || !form.start} onClick={add}>Add match</button>
       </div>
     </div>
+  )
+}
+
+function MatchLength({ tournamentId, minutes, onDone }: { tournamentId: string; minutes: number; onDone: () => void }) {
+  const { token } = useSession()
+  const toast = useToast()
+  const [value, setValue] = useState(String(minutes))
+  async function save() {
+    try {
+      const r = await api<{ matches_updated: number }>(`/admin/tournaments/${tournamentId}`, token,
+        { method: 'PATCH', body: { match_minutes: Number(value) } })
+      toast(`Match length ${value} min: ${r.matches_updated} upcoming matches updated`)
+      onDone()
+    } catch (e) {
+      toast(errorText(e), 'bad')
+    }
+  }
+  return (
+    <div className="card form-grid">
+      <label>Match length (minutes)<input inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} /></label>
+      <button className="primary" disabled={!value || Number(value) === minutes} onClick={save}>Save length</button>
+      <p className="muted small" style={{ gridColumn: '1 / -1' }}>Sets the late-join cutoff (67%) and clean-sheet minutes.
+        Matches already under way keep their length.</p>
+    </div>
+  )
+}
+
+type SquadRow = { id: string; display_name: string; position: string; active: boolean; team: string; has_played: boolean }
+
+function Squads({ tournamentId }: { tournamentId: string }) {
+  const { data, reload } = useApi<{ positions: string[]; athletes: SquadRow[] }>(`/admin/tournaments/${tournamentId}/squads`)
+  const [team, setTeam] = useState('')
+  if (!data) return <Skeleton rows={6} />
+  const teams = [...new Set(data.athletes.map((a) => a.team))]
+  const shown = data.athletes.filter((a) => a.team === (team || teams[0]))
+  return (
+    <div>
+      <p className="muted small">Check names and positions against the team sheets. Positions lock once a player has played.</p>
+      <div className="chip-row sort-row">
+        {teams.map((t) => (
+          <button key={t} className={`chip ${(team || teams[0]) === t ? 'on' : ''}`} onClick={() => setTeam(t)}>{t}</button>
+        ))}
+      </div>
+      <ul className="plain">{shown.map((a) => <SquadEditRow key={a.id} a={a} positions={data.positions} onDone={reload} />)}</ul>
+    </div>
+  )
+}
+
+function SquadEditRow({ a, positions, onDone }: { a: SquadRow; positions: string[]; onDone: () => void }) {
+  const { token } = useSession()
+  const toast = useToast()
+  const [name, setName] = useState(a.display_name)
+  const [pos, setPos] = useState(a.position)
+  const dirty = name.trim() !== a.display_name || pos !== a.position
+  async function save(body: Record<string, unknown>) {
+    try {
+      await api(`/admin/athletes/${a.id}`, token, { method: 'PATCH', body })
+      toast(`${name} updated`)
+      onDone()
+    } catch (e) {
+      toast(errorText(e), 'bad')
+    }
+  }
+  return (
+    <li className={`squad-edit ${a.active ? '' : 'inactive'}`}>
+      <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Name" />
+      <select value={pos} onChange={(e) => setPos(e.target.value)} disabled={a.has_played} aria-label="Position"
+        title={a.has_played ? 'Fixed: this player has played' : undefined}>
+        {positions.map((p) => <option key={p} value={p}>{p}</option>)}
+      </select>
+      {dirty
+        ? <button className="join-btn" onClick={() => save({ display_name: name, position: pos })}>Save</button>
+        : <button className="link" onClick={() => save({ active: !a.active })}>{a.active ? 'Remove' : 'Restore'}</button>}
+    </li>
   )
 }

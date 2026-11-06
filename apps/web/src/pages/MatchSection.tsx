@@ -56,7 +56,7 @@ export default function MatchSection({ matchId, section, focus }: { matchId: str
   return (
     <section>
       <PageHeader title={section === 'teams' && match.locked ? 'My teams' : SECTIONS[section]} back={`#/match/${matchId}`}
-        subtitle={`${match.home_team.name} ${match.score ? `${match.score.home}–${match.score.away}` : 'vs'} ${
+        subtitle={`${match.home_team.name} ${match.score?.walkover ? 'v (walkover, voided)' : match.score ? `${match.score.home}–${match.score.away}` : 'vs'} ${
           match.away_team.name} · ${match.locked ? statusLabel(match.status) : `Deadline ${kickoff(match.scheduled_start)}`}`} />
       {section === 'contests' && <ContestsTab match={match} />}
       {section === 'teams' && <TeamsTab match={match} focus={focus} />}

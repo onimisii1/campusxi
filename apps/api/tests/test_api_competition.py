@@ -69,7 +69,11 @@ def test_walkover_voids_fantasy_and_counts_in_the_league(sw, client, db):
     client.clock.now = sw["kickoff"] + timedelta(minutes=12)
     res = client.post(f"/admin/matches/{mid}/walkover", headers=auth(sw["admin"]), json={"winner": "away"})
     assert res.status_code == 200
-    assert (res.json()["home_score"], res.json()["away_score"], res.json()["walkover"]) == (0, 3, True)
+    # no made-up scoreline: shown as voided; the winner still gets the league points
+    assert (res.json()["home_score"], res.json()["away_score"], res.json()["walkover"]) == (0, 0, True)
+    table = {r["team"]["name"]: r for r in client.get(f"/tournaments/{sw['tournament']['id']}/standings").json()["rows"]}
+    assert (table["Law"]["won"], table["Law"]["points"], table["Law"]["difference"]) == (1, 3, 0)
+    assert (table["Engineering"]["lost"], table["Engineering"]["points"]) == (1, 0)
     assert db.execute("select status from contests where id = %s", (c["id"],)).fetchone()["status"] == "cancelled"
     assert client.get(f"/matches/{mid}").json()["status"] == "confirmed"
     season = client.get(f"/tournaments/{sw['tournament']['id']}/leaderboard").json()
@@ -153,3 +157,32 @@ def test_admin_match_list_and_scorer_picker(sw, client, db):
     other = make_user(db, make_school(db, "Elsewhere"), roles=("player", "admin"))
     assert client.get(f"/admin/tournaments/{tid}/matches", headers=auth(other)).status_code == 403
     assert client.get("/admin/users", headers=auth(sw["player"])).status_code == 403
+
+
+# ---------- squad audit and match length ----------
+
+def test_admin_audits_squads_and_match_length(sw, client, db):
+    tid, admin = sw["tournament"]["id"], sw["admin"]
+    squads = client.get(f"/admin/tournaments/{tid}/squads", headers=auth(admin)).json()
+    assert "GK" in squads["positions"] and len(squads["athletes"]) == 72
+    target = next(a for a in squads["athletes"] if a["display_name"] == "Medicine MID 1")
+    res = client.patch(f"/admin/athletes/{target['id']}", headers=auth(admin), json={"position": "ST", "display_name": "Kolo"})
+    assert res.status_code == 200 and (res.json()["position"], res.json()["display_name"]) == ("FWD", "Kolo")
+    assert client.patch(f"/admin/athletes/{target['id']}", headers=auth(admin),
+                        json={"display_name": "Medicine MID 2"}).json()["error"]["code"] == "name_taken"
+    assert client.patch(f"/admin/athletes/{target['id']}", headers=auth(admin),
+                        json={"position": "pitcher"}).json()["error"]["code"] == "bad_position"
+
+    # once a player has played, their position is fixed (past points depend on it)
+    mid, n = sw["match"]["id"], sw["names"]
+    client.clock.now = sw["kickoff"] + timedelta(minutes=5)
+    post(client, sw["s1"], mid, ev(1, n["Engineering GK 1"], "save", 4))
+    gk = n["Engineering GK 1"]
+    assert client.patch(f"/admin/athletes/{gk}", headers=auth(admin), json={"position": "DEF"}).json()["error"]["code"]         == "already_played"
+    assert client.patch(f"/admin/athletes/{gk}", headers=auth(admin), json={"display_name": "Lookman"}).status_code == 200
+
+    res = client.patch(f"/admin/tournaments/{tid}", headers=auth(admin), json={"match_minutes": 30}).json()
+    assert res["matches_updated"] == 1          # the live match keeps its length; the unstarted one follows
+    assert db.execute("select scheduled_minutes from matches where id = %s", (mid,)).fetchone()["scheduled_minutes"] == 90
+    other = make_user(db, make_school(db, "Elsewhere"), roles=("player", "admin"))
+    assert client.patch(f"/admin/athletes/{gk}", headers=auth(other), json={"active": False}).status_code == 403

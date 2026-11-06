@@ -61,7 +61,7 @@ export default function AdminMatchPage({ tournamentId, matchId }: { tournamentId
       <div className="card">
         <div className="row between">
           <span className={`badge ${m.status === 'live' ? 'bad' : done ? 'good' : ''}`}>{STATUS_LABEL[m.status] ?? m.status}</span>
-          {m.home_score !== null && <strong>{m.home_score}–{m.away_score}{m.walkover ? ' (walkover)' : ''}</strong>}
+          {m.home_score !== null && <strong>{m.walkover ? 'Walkover · voided' : `${m.home_score}–${m.away_score}`}</strong>}
         </div>
         {m.kicked_off_at && <p className="small muted">Kicked off {kickoff(m.kicked_off_at)}</p>}
         {step && <p className="small"><strong>Next:</strong> {step}</p>}

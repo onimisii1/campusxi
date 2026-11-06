@@ -88,7 +88,7 @@ function Fixtures({ tournamentId, name }: { tournamentId: string; name: string }
     rows: finished.filter((m) => shortDate(m.scheduled_start) === lastDay).map((m) => ({
       rank: m.code ?? '', chip: { code: teamCode(m.home_team.name), colour: chipColour(m.home_team) },
       text: `v ${m.away_team.name}`, sub: m.score?.walkover ? 'Walkover' : 'Full time',
-      cells: ['', `${m.score!.home}–${m.score!.away}`, ''] })),
+      cells: ['', m.score?.walkover ? 'Voided' : `${m.score!.home}–${m.score!.away}`, ''] })),
   })
   const days = new Map<string, Card[]>()
   for (const m of data) {
@@ -108,7 +108,9 @@ function Fixtures({ tournamentId, name }: { tournamentId: string; name: string }
                   <span className="fx-code">{m.code ?? ''}</span>
                   <TeamChip team={m.home_team} />
                   <span className="fx-mid">
-                    {m.score
+                    {m.score?.walkover
+                      ? <b className="voided">Voided</b>
+                      : m.score
                       ? <b className={m.score.final ? '' : 'live'}>{m.score.home} – {m.score.away}</b>
                       : <span>{new Date(m.scheduled_start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>}
                   </span>

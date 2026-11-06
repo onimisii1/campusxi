@@ -88,13 +88,14 @@ defender has been on the pitch for 60% of the match and disappear if their side 
 
 - **Kick off now** (admin screen or scorer app) starts the match clock when the referee does;
   teams still lock at the scheduled time. Delay buttons move the kick-off and reopen teams.
-- **Walkover:** the winner gets the league points (placeholder 3–0 football, 20–0 basketball);
+- **Walkover:** shown as voided (no scoreline); the winner still gets the league points;
   fantasy contests and challenges for that match are voided.
 - **League tables:** football W3 D1 L0 (points, goal difference, goals scored); basketball W2 L0
   (points, points difference, points scored). Teams level on every tiebreak share a rank ("2=").
 - **Golden boot** (goals, then assists, then fewer matches) and **basketball MVP**
   (PTS + 1.2 REB + 1.5 AST + 2.5 STL + 2 BLK), from official stats.
-- **Knockouts** are added by hand; the bracket suggests 1v4 and 2v3 from the table.
+- **Knockouts** are paired by the admin; the bracket suggests 1v4 and 2v3 from the table.
+- **Squad audit:** admins fix names and positions (Squads tab) until a player has played, and set the match length.
 - **Past results** (before the app was used) import as `code,home_team,away_team,home_score,away_score,played_at`,
   with optional stat lines `code,team,athlete,goals,assists` or `...,pts,reb,ast,stl,blk`.
 - Basketball is positionless (any 8, max 5 from one side) and scored with the MVP weights

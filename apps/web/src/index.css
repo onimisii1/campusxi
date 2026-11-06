@@ -174,7 +174,7 @@ label {
   background: none;
   border: 0;
   padding: 6px 0;
-  color: var(--brand);
+  color: var(--link);
   text-decoration: underline;
 }
 
@@ -1894,4 +1894,30 @@ table.league tr.qualify td {
   color: inherit;
   font-weight: 600;
   font-size: 0.85rem;
+}
+
+.fx-mid b.voided {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.squad-edit {
+  display: grid;
+  grid-template-columns: 1fr 76px 64px;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.squad-edit input,
+.squad-edit select {
+  min-width: 0;
+}
+
+.squad-edit.inactive input {
+  text-decoration: line-through;
+  opacity: 0.6;
 }

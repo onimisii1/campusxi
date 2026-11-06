@@ -12,14 +12,14 @@ from app.audit import audit
 from app.auth import require_admin, require_superadmin
 from app.clock import utcnow
 from app.db import get_conn
-from app.engines.scoring.rules import CURRENT_VERSION
+from app.engines.scoring.rules import CURRENT_VERSION, POSITIONS
 from app.errors import ApiError
 from app.competition import bracket
-from app.imports import parse_fixtures, parse_result_stats, parse_results, parse_squads
+from app.imports import normalise_position, parse_fixtures, parse_result_stats, parse_results, parse_squads
 from app.live import lineup_entries, stream_scores, tallies
 from app.matches import IN_PLAY_STATUSES, assert_open, kick_off, load_match
 from app.routers.contests import create_free_contest
-from app.schemas import (ConfirmIn, KnockoutIn, LineupIn, PostponeIn, ReopenIn, RolesIn, SchoolIn, ScorersIn, TournamentIn,
+from app.schemas import (AthletePatch, ConfirmIn, KnockoutIn, LineupIn, TournamentPatch, PostponeIn, ReopenIn, RolesIn, SchoolIn, ScorersIn, TournamentIn,
                          WalkoverIn)
 from app.settlement import settle_free, void_match
 
@@ -27,8 +27,8 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 DISPUTE_HOLD = timedelta(hours=24)   # PRD K1: payouts wait 24h after confirmation
 
-# Walkover scorelines (placeholders until the organisers confirm theirs).
-WALKOVER_SCORE = {"football": 3, "basketball": 20, "volleyball": 3}
+# A walkover has no scoreline (agreed 6 Nov 2026: it shows as voided); the winner still gets the
+# league points, recorded as 0-0 with `winner` set so goal difference is untouched.
 
 # Most athletes a side can start (volleyball: six on court plus the libero).
 MAX_STARTERS = {"football": 11, "basketball": 5, "volleyball": 7}
@@ -434,8 +434,7 @@ def walkover(match_id: UUID, body: WalkoverIn, user=Depends(require_admin), conn
     m = _admin_match(conn, user, match_id)
     if m["status"] not in IN_PLAY_STATUSES + ("postponed",):
         raise ApiError(409, "cannot_walkover", f"this match is {m['status']}")
-    goals = WALKOVER_SCORE[m["sport"]]
-    home, away = (goals, 0) if body.winner == "home" else (0, goals)
+    home = away = 0
     conn.execute(
         """insert into match_results (match_id, home_score, away_score, winner, confirmed_by, confirmed_at, walkover)
            values (%s, %s, %s, %s, %s, %s, true)""", (match_id, home, away, body.winner, user["id"], now))
@@ -500,6 +499,73 @@ def school_users(role: str | None = None, user=Depends(require_admin), conn=Depe
     return conn.execute(
         """select id, team_name, roles from users where school_id = %s and (%s::text is null or %s = any(roles))
            order by team_name""", (user["school_id"], role, role)).fetchall()
+
+
+@router.patch("/tournaments/{tournament_id}")
+def update_tournament(tournament_id: UUID, body: TournamentPatch, user=Depends(require_admin), conn=Depends(get_conn)):
+    """Change the match length; matches that haven't started yet follow it."""
+    t = _tournament(conn, user, tournament_id)
+    conn.execute("update tournaments set match_minutes = %s where id = %s", (body.match_minutes, t["id"]))
+    changed = conn.execute(
+        """update matches set scheduled_minutes = %s where tournament_id = %s and status in ('scheduled', 'lineup_out')
+           and kicked_off_at is null returning id""", (body.match_minutes, t["id"])).fetchall()
+    audit(conn, user["id"], "tournament.update", "tournament", t["id"], match_minutes=body.match_minutes,
+          before=t["match_minutes"], matches_updated=len(changed))
+    return {"id": t["id"], "match_minutes": body.match_minutes, "matches_updated": len(changed)}
+
+
+@router.get("/tournaments/{tournament_id}/squads")
+def admin_squads(tournament_id: UUID, user=Depends(require_admin), conn=Depends(get_conn)):
+    """Every athlete by team, for auditing names and positions."""
+    t = _tournament(conn, user, tournament_id)
+    rows = conn.execute(
+        """select a.id, a.display_name, a.position, a.active, tm.id as team_id, tm.name as team,
+                  exists (select 1 from match_lineups l join matches m on m.id = l.match_id
+                          where l.athlete_id = a.id and m.status in ('live', 'final_pending', 'confirmed')) as has_played
+           from athletes a join teams tm on tm.id = a.team_id where tm.tournament_id = %s
+           order by tm.name, a.position, a.display_name""", (t["id"],)).fetchall()
+    return {"sport": t["sport"], "positions": sorted(POSITIONS[t["sport"]]), "athletes": rows}
+
+
+@router.patch("/athletes/{athlete_id}")
+def update_athlete(athlete_id: UUID, body: AthletePatch, user=Depends(require_admin), conn=Depends(get_conn)):
+    """Fix a name or position, or retire an athlete. Positions are fixed once the athlete has played,
+    because past points depend on them."""
+    a = conn.execute(
+        """select a.*, tr.school_id, tr.sport from athletes a join teams tm on tm.id = a.team_id
+           join tournaments tr on tr.id = tm.tournament_id where a.id = %s for update of a""",
+        (athlete_id,)).fetchone()
+    if a is None:
+        raise ApiError(404, "athlete_not_found", "athlete not found")
+    _guard_school(user, a["school_id"])
+    changes = {}
+    if body.display_name is not None and body.display_name.strip() != a["display_name"]:
+        name = body.display_name.strip()
+        if conn.execute("select 1 from athletes where team_id = %s and lower(display_name) = lower(%s) and id <> %s",
+                        (a["team_id"], name, athlete_id)).fetchone():
+            raise ApiError(409, "name_taken", f"{name} is already in this squad")
+        changes["display_name"] = name
+    if body.position is not None:
+        pos = normalise_position(a["sport"], body.position)
+        if pos is None:
+            raise ApiError(422, "bad_position", f"{body.position!r} isn't a {a['sport']} position")
+        if pos != a["position"]:
+            if conn.execute(
+                    """select 1 from match_lineups l join matches m on m.id = l.match_id where l.athlete_id = %s
+                       and m.status in ('live', 'final_pending', 'confirmed')""", (athlete_id,)).fetchone():
+                raise ApiError(409, "already_played", "positions are fixed once a player has played: "
+                                                      "past points depend on them")
+            changes["position"] = pos
+    if body.active is not None and body.active != a["active"]:
+        changes["active"] = body.active
+    if changes:
+        sets = ", ".join(f"{k} = %s" for k in changes)
+        conn.execute(f"update athletes set {sets} where id = %s", (*changes.values(), athlete_id))  # noqa: S608
+        audit(conn, user["id"], "athlete.update", "athlete", athlete_id,
+              before={k: a[k] for k in changes}, after=changes)
+    row = conn.execute("select id, display_name, position, active from athletes where id = %s",
+                       (athlete_id,)).fetchone()
+    return {**row, "changed": sorted(changes)}
 
 
 @router.post("/users/{user_id}/roles")
