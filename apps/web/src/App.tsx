@@ -1,5 +1,8 @@
 import { ToastProvider } from './components/Toast'
 import TopBar from './components/TopBar'
+import AdminHome from './pages/admin/AdminHome'
+import AdminMatchPage from './pages/admin/AdminMatchPage'
+import AdminTournament from './pages/admin/AdminTournament'
 import ChallengeInvite from './pages/ChallengeInvite'
 import ContestBoard from './pages/ContestBoard'
 import Home from './pages/Home'
@@ -16,7 +19,7 @@ import ScorerApp from './scorer/ScorerApp'
 import { SessionProvider } from './session'
 
 function Page({ route }: { route: string[] }) {
-  const [page, a, b] = route
+  const [page, a, b, c] = route
   switch (page) {
     case 'match':
       if (b && b in SECTIONS) return <MatchSection key={`${a}/${b}`} matchId={a} section={b as Section} />
@@ -30,6 +33,10 @@ function Page({ route }: { route: string[] }) {
     case 'signin': return <SignInPage />
     case 'profile': return <ProfilePage />
     case 'scorer': return <ScorerApp />
+    case 'admin':
+      if (a === 't' && b) return <AdminTournament key={b} tournamentId={b} />
+      if (a === 'm' && b && c) return <AdminMatchPage key={c} tournamentId={b} matchId={c} />
+      return <AdminHome />
     default: return <Home />
   }
 }

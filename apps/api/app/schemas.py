@@ -48,6 +48,19 @@ class ConfirmIn(BaseModel):
     official_scorer_id: UUID
 
 
+class WalkoverIn(BaseModel):
+    winner: Literal["home", "away"]
+
+
+class KnockoutIn(BaseModel):
+    stage: Literal["semi", "final", "third_place"]
+    home_team_id: UUID
+    away_team_id: UUID
+    scheduled_start: datetime
+    code: str | None = Field(default=None, max_length=12)
+    venue: str | None = Field(default=None, max_length=120)
+
+
 class PostponeIn(BaseModel):
     new_start: datetime | None = None
 

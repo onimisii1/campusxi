@@ -1,10 +1,12 @@
 """CSV import for squads and fixtures (PRD B1, B2). All-or-nothing: any bad row rejects the file.
 
-squads.csv:   team,athlete,position[,jersey]   e.g. MCE,Lookman,GK,white
+squads.csv:   team,athlete,position[,jersey]   e.g. MCE,Lookman,GK,white (basketball position may be blank)
               position accepts the usual codes (LB, CB, CM, ST, PG, Libero...) and maps them
               to the app's groups; jersey is a colour name or #RRGGBB, once per team is enough.
-fixtures.csv: home_team,away_team,scheduled_start,venue
+fixtures.csv: home_team,away_team,scheduled_start,venue[,code,stage]
               scheduled_start is ISO 8601; times without an offset are read as Lagos time (UTC+1).
+              code is the organisers' match code (M4, G5); stage is league (default), semi, final
+              or third_place.
 """
 import csv
 import io
@@ -27,6 +29,7 @@ POSITION_ALIASES = {
         "G": {"G", "PG", "SG", "GUARD", "POINT GUARD", "SHOOTING GUARD"},
         "F": {"F", "SF", "PF", "FORWARD", "SMALL FORWARD", "POWER FORWARD"},
         "C": {"C", "CENTER", "CENTRE"},
+        "P": {"", "P", "PLAYER"},   # positionless basketball: a blank position is fine
     },
     "volleyball": {
         "S": {"S", "SETTER"},
@@ -110,10 +113,14 @@ def parse_squads(text: str, sport: str) -> tuple:
     return out, colours, errors
 
 
+STAGES = ("league", "semi", "final", "third_place")
+
+
 def parse_fixtures(text: str, team_names: set) -> tuple:
+    """Returns ([(home, away, start, venue, code, stage)], errors)."""
     rows, errors = _read(text, ("home_team", "away_team", "scheduled_start"))
     known = {n.lower(): n for n in team_names}
-    out = []
+    out, codes = [], set()
     for line, r in rows:
         home, away = known.get(r["home_team"].lower()), known.get(r["away_team"].lower())
         problems = [f"unknown team {name!r} (import squads first)"
@@ -127,8 +134,97 @@ def parse_fixtures(text: str, team_names: set) -> tuple:
         except ValueError:
             problems.append(f"scheduled_start {r['scheduled_start']!r} is not an ISO date-time")
             start = None
+        code = r.get("code") or None
+        if code and len(code) > 12:
+            problems.append(f"code {code!r} is longer than 12 characters")
+        elif code and code.lower() in codes:
+            problems.append(f"code {code!r} is used twice")
+        stage = (r.get("stage") or "league").lower().replace(" ", "_").replace("-", "_")
+        stage = {"semi_final": "semi", "semifinal": "semi", "3rd_place": "third_place"}.get(stage, stage)
+        if stage not in STAGES:
+            problems.append(f"stage {r['stage']!r} isn't one of {', '.join(STAGES)}")
+        if code:
+            codes.add(code.lower())
         if problems:
             errors.extend({"row": line, "message": m} for m in problems)
             continue
-        out.append((home, away, start, r.get("venue") or None))
+        out.append((home, away, start, r.get("venue") or None, code, stage))
+    return out, errors
+
+
+# results.csv:  code,home_team,away_team,home_score,away_score,played_at[,venue]
+#               matches played before the app was used (e.g. NUESA Matchday 1).
+# stats.csv:    code,team,athlete, then goals,assists (football) or pts,reb,ast,stl,blk (basketball)
+RESULT_STAT_COLUMNS = {
+    "football": {"goals": "goal", "assists": "assist"},
+    "basketball": {"pts": "point", "reb": "rebound", "ast": "assist", "stl": "steal", "blk": "block"},
+}
+
+
+def _count(raw: str):
+    raw = raw.strip()
+    if raw == "":
+        return 0
+    return int(raw) if raw.isdigit() else None
+
+
+def parse_results(text: str, team_names: set, sport: str) -> tuple:
+    """Returns ([(code, home, away, home_score, away_score, played_at, venue)], errors)."""
+    rows, errors = _read(text, ("code", "home_team", "away_team", "home_score", "away_score", "played_at"))
+    known = {n.lower(): n for n in team_names}
+    out, codes = [], set()
+    for line, r in rows:
+        problems = []
+        home, away = known.get(r["home_team"].lower()), known.get(r["away_team"].lower())
+        problems += [f"unknown team {n!r} (import squads first)" for n, hit in
+                     ((r["home_team"], home), (r["away_team"], away)) if not hit]
+        if home and home == away:
+            problems.append("a team can't play itself")
+        code = r["code"]
+        if not code or len(code) > 12:
+            problems.append("every result needs a code of up to 12 characters (e.g. M1)")
+        elif code.lower() in codes:
+            problems.append(f"code {code!r} is used twice")
+        codes.add(code.lower())
+        hs, aws = _count(r["home_score"]), _count(r["away_score"])
+        if hs is None or aws is None or r["home_score"] == "" or r["away_score"] == "":
+            problems.append("scores must be whole numbers")
+        elif hs == aws and sport != "football":
+            problems.append(f"{sport} results can't be a draw")
+        try:
+            played = datetime.fromisoformat(r["played_at"])
+            if played.tzinfo is None:
+                played = played.replace(tzinfo=LAGOS)
+        except ValueError:
+            problems.append(f"played_at {r['played_at']!r} is not an ISO date-time")
+            played = None
+        if problems:
+            errors.extend({"row": line, "message": m} for m in problems)
+            continue
+        out.append((code, home, away, hs, aws, played, r.get("venue") or None))
+    return out, errors
+
+
+def parse_result_stats(text: str, sport: str) -> tuple:
+    """Returns ([(row, (code, team, athlete, {event_type: amount}))], errors)."""
+    columns = RESULT_STAT_COLUMNS.get(sport)
+    if columns is None:
+        return [], [{"row": 1, "message": f"stat lines aren't supported for {sport} yet"}]
+    rows, errors = _read(text, ("code", "team", "athlete"))
+    out = []
+    for line, r in rows:
+        counts, bad = {}, []
+        for col, etype in columns.items():
+            n = _count(r.get(col, ""))
+            if n is None:
+                bad.append(col)
+            elif n:
+                counts[etype] = n
+        if bad:
+            errors.append({"row": line, "message": f"{', '.join(bad)} must be whole numbers"})
+            continue
+        if not (r["code"] and r["team"] and r["athlete"]):
+            errors.append({"row": line, "message": "code, team and athlete are required"})
+            continue
+        out.append((line, (r["code"], r["team"], r["athlete"], counts)))
     return out, errors

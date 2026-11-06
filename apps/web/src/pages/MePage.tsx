@@ -44,6 +44,8 @@ export default function MePage() {
       <ul className="menu-list">
         <li><a href="#/challenges">My challenges <span aria-hidden>→</span></a></li>
         {me.roles.includes('scorer') && <li><a href="#/scorer">Scorer app <span aria-hidden>→</span></a></li>}
+        {me.roles.some((r) => r === 'admin' || r === 'superadmin') && (
+          <li><a href="#/admin">Admin: match day <span aria-hidden>→</span></a></li>)}
         <li><button onClick={signOut}>Sign out</button></li>
       </ul>
       <p className="muted small">CampusXI is for players aged 18 and over. Play responsibly.</p>

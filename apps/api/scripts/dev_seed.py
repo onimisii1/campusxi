@@ -121,8 +121,9 @@ def main():
 
 def load_nuesa(client, ok, tok):
     """Import a real tournament from CSVs in the repo's gitignored data/ folder:
-    nuesa_{football,basketball}_{squads,fixtures}.csv. Those files hold students' names, so they never
-    go into git; without them this step is skipped."""
+    nuesa_{football,basketball}_{squads,fixtures,results,result_stats}.csv (results are optional).
+    Those files hold students' names, so they never go into git; without them this step is skipped.
+    Prints tokens for the Nile admin and two Nile scorers (admins manage only their own school)."""
     data = REPO / "data"
     if not (data / "nuesa_football_squads.csv").exists():
         print("no data/nuesa_*.csv files; skipping the NUESA tournament", file=sys.stderr)
@@ -131,21 +132,29 @@ def load_nuesa(client, ok, tok):
         row = c.execute("select id from schools where name = 'Nile University of Nigeria'").fetchone()
         school = row[0] if row else c.execute(
             "insert into schools (name) values ('Nile University of Nigeria') returning id").fetchone()[0]
-        uid = uuid.uuid4()  # admins manage only their own school, so this one gets its own admin
-        c.execute("insert into users (id, school_id, team_name, roles, dob) values (%s, %s, %s, %s, '2000-01-01')",
-                  (uid, school, f"nile_admin_{uid.hex[:4]}", ["player", "admin"]))
-    admin = {"Authorization": f"Bearer {tok(uid)}"}
+        nile = {}
+        for name, roles in (("admin", ["player", "admin"]), ("scorer_a", ["player", "scorer"]),
+                            ("scorer_b", ["player", "scorer"])):
+            nile[name] = uuid.uuid4()
+            c.execute("insert into users (id, school_id, team_name, roles, dob) values (%s, %s, %s, %s, '2000-01-01')",
+                      (nile[name], school, f"nile_{name}_{nile[name].hex[:4]}", roles))
+    admin = {"Authorization": f"Bearer {tok(nile['admin'])}"}
     for sport, minutes in (("football", 30), ("basketball", 32)):
         if not (data / f"nuesa_{sport}_squads.csv").exists():
             continue
         t = ok(client.post("/admin/tournaments", headers=admin, json={
             "school_id": str(school), "sport": sport, "name": f"NUESA Sports Tournament 2026/27 ({sport.title()})",
             "match_minutes": minutes}))
-        for kind in ("squads", "fixtures"):
-            ok(client.post(f"/admin/tournaments/{t['id']}/{kind}", headers=admin,
-                           content=(data / f"nuesa_{sport}_{kind}.csv").read_text(encoding="utf-8")))
+        for kind, route in (("squads", "squads"), ("fixtures", "fixtures"), ("results", "results"),
+                            ("result_stats", "result-stats")):
+            path = data / f"nuesa_{sport}_{kind}.csv"
+            if path.exists():
+                ok(client.post(f"/admin/tournaments/{t['id']}/{route}", headers=admin,
+                               content=path.read_text(encoding="utf-8")))
         ok(client.post(f"/admin/tournaments/{t['id']}/publish", headers=admin))
         print(f"NUESA {sport} tournament {t['id']} loaded", file=sys.stderr)
+    for name, uid in nile.items():
+        print(f"TOKEN_NILE_{name.upper()}={tok(uid)}")
 
 
 if __name__ == "__main__":

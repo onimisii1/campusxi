@@ -94,6 +94,22 @@ BASKETBALL_V1 = ScoringRules(
     },
 )
 
+# NUESA's published MVP weights (Points 1, Rebounds 1.2, Assists 1.5, Steals 2.5, Blocks 2), agreed
+# 6 Nov 2026 so fantasy points line up with what organisers announce. Still a draft until the pilot.
+BASKETBALL_V2 = ScoringRules(
+    sport=BASKETBALL,
+    version="basketball-v2-draft",
+    appearance={"start": D(4), "sub_on": D(2)},
+    events={
+        "point": D(1),
+        "rebound": D("1.2"),
+        "assist": D("1.5"),
+        "steal": D("2.5"),
+        "block": D(2),
+        "turnover": D(-1),
+    },
+)
+
 VOLLEYBALL_V1 = ScoringRules(
     sport=VOLLEYBALL,
     version="volleyball-v1-draft",
@@ -109,8 +125,8 @@ VOLLEYBALL_V1 = ScoringRules(
     },
 )
 
-SCORING_RULES = {r.version: r for r in (FOOTBALL_V1, BASKETBALL_V1, VOLLEYBALL_V1)}
-CURRENT_VERSION = {FOOTBALL: FOOTBALL_V1.version, BASKETBALL: BASKETBALL_V1.version,
+SCORING_RULES = {r.version: r for r in (FOOTBALL_V1, BASKETBALL_V1, BASKETBALL_V2, VOLLEYBALL_V1)}
+CURRENT_VERSION = {FOOTBALL: FOOTBALL_V1.version, BASKETBALL: BASKETBALL_V2.version,
                    VOLLEYBALL: VOLLEYBALL_V1.version}
 
 TEAM_RULES = {
@@ -120,10 +136,10 @@ TEAM_RULES = {
         PositionGroup("midfielders", frozenset({"MID"}), 3, 5),
         PositionGroup("forwards", frozenset({"FWD"}), 1, 3),
     )),
+    # Positionless (agreed 6 Nov 2026): campus squads rarely list guards/forwards/centres, so any
+    # 8 players, at most 5 from one side. P is "player"; G/F/C are kept when a team sheet has them.
     BASKETBALL: TeamRules(size=8, max_per_side=5, groups=(
-        PositionGroup("guards", frozenset({"G"}), 2),
-        PositionGroup("forwards", frozenset({"F"}), 2),
-        PositionGroup("centres", frozenset({"C"}), 1),
+        PositionGroup("players", frozenset({"P", "G", "F", "C"}), 0),
     )),
     VOLLEYBALL: TeamRules(size=7, max_per_side=4, groups=(
         PositionGroup("setters", frozenset({"S"}), 1),

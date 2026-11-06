@@ -133,8 +133,27 @@ def test_basketball_scoring():
                  *[("pg", "rebound", None)] * 5, ("pg", "assist", None), ("pg", "steal", None),
                  ("pg", "block", None), ("pg", "turnover", None), ("bench", "sub_on", 12))
     p = points(ctx, lu, evs)
-    assert p["pg"] == D(4) + 5 + D("6.0") + D("1.5") + 3 + 3 - 1
+    # basketball-v2-draft uses NUESA's MVP weights: steal 2.5, block 2.
+    assert p["pg"] == D(4) + 5 + D("6.0") + D("1.5") + D("2.5") + 2 - 1
     assert p["bench"] == 2
+    # Matches pinned to v1 keep the old steal/block values.
+    v1 = MatchContext(BASKETBALL, "home", "away", scheduled_minutes=40, rules_version="basketball-v1-draft")
+    assert points(v1, lu, evs)["pg"] == D(4) + 5 + D("6.0") + D("1.5") + 3 + 3 - 1
+
+
+def test_basketball_v2_reproduces_nuesa_mvp_totals():
+    """The poster's MVP totals (Okoro 36.3, Tomini 31.6, ...) are our event weights plus the
+    +4 starter bonus: PTS + 1.2 REB + 1.5 AST + 2.5 STL + 2 BLK."""
+    ctx = MatchContext(BASKETBALL, "home", "away", scheduled_minutes=32)
+    lines = {"okoro": (4, 9, 4, 3, 4, "36.3"), "tomini": (20, 3, 2, 2, 0, "31.6"), "chris": (9, 11, 1, 2, 0, "28.7"),
+             "jordan": (12, 1, 2, 4, 0, "26.2"), "pauly": (7, 8, 1, 3, 0, "25.6")}
+    lu = lineup(*[(k, "home", "P", True) for k in lines])
+    evs = []
+    for k, (pts, reb, ast, stl, blk, _) in lines.items():
+        evs += [(k, "point", None, {"amount": 1})] * pts + [(k, "rebound", None)] * reb
+        evs += [(k, "assist", None)] * ast + [(k, "steal", None)] * stl + [(k, "block", None)] * blk
+    p = points(ctx, lu, events(*evs))
+    assert {k: p[k] - 4 for k in lines} == {k: D(v[5]) for k, v in lines.items()}
 
 
 def test_volleyball_scoring():

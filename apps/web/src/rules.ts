@@ -18,11 +18,8 @@ export const TEAM_RULES: Record<string, TeamRules> = {
   basketball: {
     size: 8,
     maxPerSide: 5,
-    groups: [
-      { name: 'Guards', positions: ['G'], min: 2 },
-      { name: 'Forwards', positions: ['F'], min: 2 },
-      { name: 'Centres', positions: ['C'], min: 1 },
-    ],
+    // Positionless: any 8 players (P = player; G/F/C kept when a team sheet lists them).
+    groups: [{ name: 'Players', positions: ['P', 'G', 'F', 'C'], min: 0 }],
   },
   volleyball: {
     size: 7,

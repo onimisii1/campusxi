@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 
 from app.auth import optional_user
 from app.clock import utcnow
+from app.competition import bracket, player_stats, scoreline, standings
 from app.db import get_conn
 from app.engines.payouts import final_ranks
 from app.errors import ApiError
@@ -84,6 +85,33 @@ def get_tournament(tournament_id: UUID, conn=Depends(get_conn)):
     return t
 
 
+def _published(conn, tournament_id) -> dict:
+    t = conn.execute("select * from tournaments where id = %s and status = 'published'", (tournament_id,)).fetchone()
+    if t is None:
+        raise ApiError(404, "tournament_not_found", "tournament not found")
+    return t
+
+
+@router.get("/tournaments/{tournament_id}/standings")
+def tournament_standings(tournament_id: UUID, conn=Depends(get_conn)):
+    """League table from confirmed results (walkovers included)."""
+    t = _published(conn, tournament_id)
+    return {"tournament_id": t["id"], "sport": t["sport"], "rows": standings(conn, t)}
+
+
+@router.get("/tournaments/{tournament_id}/stats")
+def tournament_stats(tournament_id: UUID, conn=Depends(get_conn)):
+    """Golden boot (football) or MVP table (basketball) from official stats."""
+    t = _published(conn, tournament_id)
+    return {"tournament_id": t["id"], "sport": t["sport"], **player_stats(conn, t)}
+
+
+@router.get("/tournaments/{tournament_id}/bracket")
+def tournament_bracket(tournament_id: UUID, conn=Depends(get_conn)):
+    t = _published(conn, tournament_id)
+    return {"tournament_id": t["id"], **bracket(conn, t)}
+
+
 @router.get("/tournaments/{tournament_id}/leaderboard")
 def season_leaderboard(tournament_id: UUID, user=Depends(optional_user), conn=Depends(get_conn)):
     """Free season-long leaderboard (PRD F3): each player's best team score per confirmed match, summed."""
@@ -92,8 +120,11 @@ def season_leaderboard(tournament_id: UUID, user=Depends(optional_user), conn=De
     if t is None:
         raise ApiError(404, "tournament_not_found", "tournament not found")
     totals, matches_played = defaultdict(Decimal), defaultdict(int)
-    confirmed = conn.execute("select id from matches where tournament_id = %s and status = 'confirmed'",
-                             (tournament_id,)).fetchall()
+    # Walkovers and imported results had no fantasy play.
+    confirmed = conn.execute(
+        """select m.id from matches m join match_results r on r.match_id = m.id
+           where m.tournament_id = %s and m.status = 'confirmed' and not r.walkover and not r.imported""",
+        (tournament_id,)).fetchall()
     for row in confirmed:
         m = load_match(conn, row["id"])
         scorer = official_or_primary_scorer(conn, m)
@@ -136,6 +167,8 @@ def _card(m, now, conn):
         "lineup_out": m["status"] == "lineup_out", "locked": is_locked(m, now),
         "seconds_to_lock": max(0, seconds),
         "late_join_until": late["until_minute"] if late else None,
+        "code": m["code"], "stage": m["stage"], "kicked_off_at": m["kicked_off_at"],
+        "score": scoreline(conn, m),
     }
 
 

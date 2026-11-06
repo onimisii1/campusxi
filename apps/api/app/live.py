@@ -42,10 +42,11 @@ IN_PLAY = ("scheduled", "lineup_out", "live")
 
 
 def elapsed_minutes(match: dict, now) -> int | None:
-    """Minutes played so far while in play (from scheduled kick-off); None once finished."""
+    """Minutes played so far while in play (from the actual kick-off); None once finished."""
     if match["status"] not in IN_PLAY or now is None:
         return None
-    played = int((now - match["scheduled_start"]).total_seconds() // 60)
+    start = match.get("kicked_off_at") or match["scheduled_start"]
+    played = int((now - start).total_seconds() // 60)
     return max(0, min(played, match["scheduled_minutes"]))
 
 

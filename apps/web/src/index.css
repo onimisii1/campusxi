@@ -1537,3 +1537,104 @@ a.sheet-btn {
 .add.on {
   background: var(--good);
 }
+
+/* ---------- admin ---------- */
+.admin-link,
+.admin-row {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.admin-link.row {
+  display: flex;
+  gap: 10px;
+}
+
+.admin-row .row + .row {
+  margin-top: 4px;
+}
+
+.next-step {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.admin-actions {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.row.gap {
+  gap: 8px;
+}
+
+.row.gap > * {
+  flex: 1;
+}
+
+.big-action {
+  font-size: 1.1rem;
+  padding: 16px;
+}
+
+.upload {
+  display: block;
+  cursor: pointer;
+}
+
+.upload input[type='file'] {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: end;
+}
+
+.form-grid .primary {
+  grid-column: 1 / -1;
+}
+
+.form-grid label,
+details.card label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+details.card summary {
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.admin-lineups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.check-row {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+
+.check-row span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check-row.on {
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+}

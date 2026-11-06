@@ -14,16 +14,21 @@ from app.clock import utcnow
 from app.db import get_conn
 from app.engines.scoring.rules import CURRENT_VERSION
 from app.errors import ApiError
-from app.imports import parse_fixtures, parse_squads
+from app.competition import bracket
+from app.imports import parse_fixtures, parse_result_stats, parse_results, parse_squads
 from app.live import lineup_entries, stream_scores, tallies
-from app.matches import assert_open, load_match
+from app.matches import IN_PLAY_STATUSES, assert_open, kick_off, load_match
 from app.routers.contests import create_free_contest
-from app.schemas import ConfirmIn, LineupIn, PostponeIn, ReopenIn, RolesIn, SchoolIn, ScorersIn, TournamentIn
+from app.schemas import (ConfirmIn, KnockoutIn, LineupIn, PostponeIn, ReopenIn, RolesIn, SchoolIn, ScorersIn, TournamentIn,
+                         WalkoverIn)
 from app.settlement import settle_free, void_match
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 DISPUTE_HOLD = timedelta(hours=24)   # PRD K1: payouts wait 24h after confirmation
+
+# Walkover scorelines (placeholders until the organisers confirm theirs).
+WALKOVER_SCORE = {"football": 3, "basketball": 20, "volleyball": 3}
 
 # Most athletes a side can start (volleyball: six on court plus the libero).
 MAX_STARTERS = {"football": 11, "basketball": 5, "volleyball": 7}
@@ -139,23 +144,136 @@ async def import_fixtures(tournament_id: UUID, request: Request, user=Depends(re
     rows, errors = parse_fixtures(await _csv_body(request), set(teams))
     if errors:
         raise ApiError(422, "invalid_csv", "fix these rows and upload again; nothing was imported", errors)
+    taken = {r["code"].lower() for r in conn.execute(
+        "select code from matches where tournament_id = %s and code is not null", (t["id"],)).fetchall()}
     created = 0
-    for home, away, start, venue in rows:
+    for home, away, start, venue, code, stage in rows:
         exists = conn.execute(
             """select 1 from matches where tournament_id = %s and home_team_id = %s and away_team_id = %s
                and scheduled_start = %s""", (t["id"], teams[home], teams[away], start)).fetchone()
         if exists:
             continue
+        if code and code.lower() in taken:
+            raise ApiError(422, "invalid_csv", "fix these rows and upload again; nothing was imported",
+                           [{"row": None, "message": f"match code {code} is already used in this tournament"}])
         match_id = conn.execute(
             """insert into matches (tournament_id, home_team_id, away_team_id, venue, scheduled_start,
-                                    scheduled_minutes, rules_version)
-               values (%s, %s, %s, %s, %s, %s, %s) returning id""",
-            (t["id"], teams[home], teams[away], venue, start, t["match_minutes"], CURRENT_VERSION[t["sport"]]),
+                                    scheduled_minutes, rules_version, code, stage)
+               values (%s, %s, %s, %s, %s, %s, %s, %s, %s) returning id""",
+            (t["id"], teams[home], teams[away], venue, start, t["match_minutes"], CURRENT_VERSION[t["sport"]],
+             code, stage),
         ).fetchone()["id"]
         create_free_contest(conn, match_id)   # every match gets a free contest for the pilot
         created += 1
     audit(conn, user["id"], "tournament.import_fixtures", "tournament", t["id"], matches_created=created)
     return {"matches_created": created, "skipped_existing": len(rows) - created}
+
+
+@router.post("/tournaments/{tournament_id}/knockout", status_code=201)
+def add_knockout(tournament_id: UUID, body: KnockoutIn, user=Depends(require_admin), conn=Depends(get_conn),
+                 now=Depends(utcnow)):
+    """A semi-final, final or 3rd-place match. The pairs are the admin's call (the bracket endpoint
+    suggests 1v4 and 2v3 from the table)."""
+    t = _tournament(conn, user, tournament_id)
+    teams = {r["id"] for r in conn.execute("select id from teams where tournament_id = %s", (t["id"],)).fetchall()}
+    if body.home_team_id not in teams or body.away_team_id not in teams:
+        raise ApiError(422, "unknown_team", "both teams must be in this tournament")
+    if body.home_team_id == body.away_team_id:
+        raise ApiError(422, "same_team", "a team can't play itself")
+    if body.scheduled_start <= now:
+        raise ApiError(422, "start_in_past", "the kick-off must be in the future")
+    if body.code and conn.execute("select 1 from matches where tournament_id = %s and lower(code) = lower(%s)",
+                                  (t["id"], body.code)).fetchone():
+        raise ApiError(409, "code_taken", f"match code {body.code} is already used in this tournament")
+    m = conn.execute(
+        """insert into matches (tournament_id, home_team_id, away_team_id, venue, scheduled_start,
+                                scheduled_minutes, rules_version, code, stage)
+           values (%s, %s, %s, %s, %s, %s, %s, %s, %s) returning id, code, stage, scheduled_start""",
+        (t["id"], body.home_team_id, body.away_team_id, body.venue, body.scheduled_start, t["match_minutes"],
+         CURRENT_VERSION[t["sport"]], body.code, body.stage)).fetchone()
+    create_free_contest(conn, m["id"])
+    audit(conn, user["id"], "tournament.add_knockout", "tournament", t["id"], match_id=m["id"], stage=body.stage)
+    return {**m, "bracket": bracket(conn, t)}
+
+
+@router.post("/tournaments/{tournament_id}/results")
+async def import_results(tournament_id: UUID, request: Request, user=Depends(require_admin),
+                         conn=Depends(get_conn), now=Depends(utcnow)):
+    """Results from before the app was used: confirmed matches with no contests or fantasy play."""
+    t = _tournament(conn, user, tournament_id)
+    teams = {r["name"]: r["id"] for r in conn.execute(
+        "select id, name from teams where tournament_id = %s", (t["id"],)).fetchall()}
+    rows, errors = parse_results(await _csv_body(request), set(teams), t["sport"])
+    taken = {r["code"].lower() for r in conn.execute(
+        "select code from matches where tournament_id = %s and code is not null", (t["id"],)).fetchall()}
+    errors += [{"row": None, "message": f"match code {r[0]} is already used in this tournament"}
+               for r in rows if r[0].lower() in taken]
+    if errors:
+        raise ApiError(422, "invalid_csv", "fix these rows and upload again; nothing was imported", errors)
+    for code, home, away, hs, aws, played, venue in rows:
+        m = conn.execute(
+            """insert into matches (tournament_id, home_team_id, away_team_id, venue, scheduled_start, kicked_off_at,
+                                    scheduled_minutes, rules_version, code, status)
+               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'confirmed') returning id""",
+            (t["id"], teams[home], teams[away], venue, played, played, t["match_minutes"],
+             CURRENT_VERSION[t["sport"]], code)).fetchone()
+        winner = "draw" if hs == aws else ("home" if hs > aws else "away")
+        conn.execute(
+            """insert into match_results (match_id, home_score, away_score, winner, confirmed_by, confirmed_at,
+                                          official_scorer_id, imported)
+               values (%s, %s, %s, %s, %s, %s, %s, true)""",
+            (m["id"], hs, aws, winner, user["id"], now, user["id"]))
+    audit(conn, user["id"], "tournament.import_results", "tournament", t["id"], results=len(rows))
+    return {"results_imported": len(rows)}
+
+
+@router.post("/tournaments/{tournament_id}/result-stats")
+async def import_result_stats(tournament_id: UUID, request: Request, user=Depends(require_admin),
+                              conn=Depends(get_conn)):
+    """Stat lines for imported results (goals/assists, or basketball box scores). They are recorded as
+    the importing admin's stat stream, which is the official stream for those matches."""
+    t = _tournament(conn, user, tournament_id)
+    rows, errors = parse_result_stats(await _csv_body(request), t["sport"])
+    matches = {r["code"].lower(): r for r in conn.execute(
+        """select m.id, m.code, m.home_team_id, m.away_team_id, r.official_scorer_id
+           from matches m join match_results r on r.match_id = m.id
+           where m.tournament_id = %s and r.imported""", (t["id"],)).fetchall()}
+    athletes = {(r["team"].lower(), r["display_name"].lower()): r for r in conn.execute(
+        """select a.id, a.team_id, a.display_name, t.name as team from athletes a join teams t on t.id = a.team_id
+           where t.tournament_id = %s""", (t["id"],)).fetchall()}
+    resolved = []
+    for row, (code, team, athlete, counts) in rows:
+        m, a = matches.get(code.lower()), athletes.get((team.lower(), athlete.lower()))
+        if m is None:
+            errors.append({"row": row, "message": f"no imported result with code {code!r} (import results first)"})
+        elif a is None:
+            errors.append({"row": row, "message": f"{athlete!r} isn't in the {team} squad"})
+        elif a["team_id"] not in (m["home_team_id"], m["away_team_id"]):
+            errors.append({"row": row, "message": f"{team} didn't play {code}"})
+        elif conn.execute("select 1 from stat_events where match_id = %s and athlete_id = %s",
+                          (m["id"], a["id"])).fetchone():
+            errors.append({"row": row, "message": f"{athlete} already has stats for {code}"})
+        else:
+            resolved.append((m, a, counts))
+    if errors:
+        raise ApiError(422, "invalid_csv", "fix these rows and upload again; nothing was imported", errors)
+    events = 0
+    for m, a, counts in resolved:
+        conn.execute("""insert into match_lineups (match_id, athlete_id, started) values (%s, %s, true)
+                        on conflict do nothing""", (m["id"], a["id"]))
+        seq = conn.execute("select coalesce(max(client_seq), 0) as s from stat_events where match_id = %s and "
+                           "scorer_id = %s", (m["id"], m["official_scorer_id"])).fetchone()["s"]
+        for etype, amount in counts.items():
+            # One event per stat carrying the count; timed football events get minute 0 (unknown).
+            seq += 1
+            conn.execute(
+                """insert into stat_events (match_id, scorer_id, athlete_id, event_type, minute, amount, client_seq)
+                   values (%s, %s, %s, %s, %s, %s, %s)""",
+                (m["id"], m["official_scorer_id"], a["id"], etype, 0 if t["sport"] == "football" else None,
+                 amount, seq))
+            events += 1
+    audit(conn, user["id"], "tournament.import_result_stats", "tournament", t["id"], stat_lines=len(resolved))
+    return {"stat_lines": len(resolved), "events": events}
 
 
 @router.post("/matches/{match_id}/lineup")
@@ -300,6 +418,34 @@ def confirm_result(match_id: UUID, body: ConfirmIn, user=Depends(require_admin),
             "confirmed_at": now, "payout_after": now + DISPUTE_HOLD}
 
 
+@router.post("/matches/{match_id}/kickoff")
+def admin_kickoff(match_id: UUID, user=Depends(require_admin), conn=Depends(get_conn), now=Depends(utcnow)):
+    """Start the match clock now (matches rarely start on the dot); see app/matches.py."""
+    m = _admin_match(conn, user, match_id)
+    result = kick_off(conn, m, now)
+    audit(conn, user["id"], "match.kickoff", "match", match_id)
+    return result
+
+
+@router.post("/matches/{match_id}/walkover")
+def walkover(match_id: UUID, body: WalkoverIn, user=Depends(require_admin), conn=Depends(get_conn),
+             now=Depends(utcnow)):
+    """A side didn't turn up: the other wins the league points; fantasy and challenges are void."""
+    m = _admin_match(conn, user, match_id)
+    if m["status"] not in IN_PLAY_STATUSES + ("postponed",):
+        raise ApiError(409, "cannot_walkover", f"this match is {m['status']}")
+    goals = WALKOVER_SCORE[m["sport"]]
+    home, away = (goals, 0) if body.winner == "home" else (0, goals)
+    conn.execute(
+        """insert into match_results (match_id, home_score, away_score, winner, confirmed_by, confirmed_at, walkover)
+           values (%s, %s, %s, %s, %s, %s, true)""", (match_id, home, away, body.winner, user["id"], now))
+    conn.execute("update matches set status = 'confirmed' where id = %s", (match_id,))
+    void_match(conn, match_id)
+    audit(conn, user["id"], "match.walkover", "match", match_id, winner=body.winner)
+    return {"match_id": match_id, "status": "confirmed", "walkover": True, "winner": body.winner,
+            "home_score": home, "away_score": away}
+
+
 @router.post("/matches/{match_id}/abandon")
 def abandon(match_id: UUID, user=Depends(require_admin), conn=Depends(get_conn)):
     m = _admin_match(conn, user, match_id)
@@ -328,6 +474,32 @@ def postpone(match_id: UUID, body: PostponeIn, user=Depends(require_admin), conn
     )
     audit(conn, user["id"], "match.postpone", "match", match_id, new_start=body.new_start)
     return {"match_id": match_id, "status": status, "scheduled_start": body.new_start or m["scheduled_start"]}
+
+
+@router.get("/tournaments/{tournament_id}/matches")
+def admin_matches(tournament_id: UUID, user=Depends(require_admin), conn=Depends(get_conn), now=Depends(utcnow)):
+    """Every match in a tournament (published or not) with what the admin still has to do."""
+    t = _tournament(conn, user, tournament_id)
+    rows = conn.execute(
+        """select m.id, m.code, m.stage, m.status, m.scheduled_start, m.kicked_off_at, m.venue,
+                  h.name as home_team, a.name as away_team, h.colour as home_colour, a.colour as away_colour,
+                  r.home_score, r.away_score, r.walkover, r.imported,
+                  (select count(*) from match_lineups l where l.match_id = m.id and l.started) as starters,
+                  (select count(*) from match_scorers s where s.match_id = m.id) as scorers,
+                  (select count(*) from stat_submissions x where x.match_id = m.id) as submissions
+           from matches m join teams h on h.id = m.home_team_id join teams a on a.id = m.away_team_id
+           left join match_results r on r.match_id = m.id
+           where m.tournament_id = %s order by m.scheduled_start, m.code""", (t["id"],)).fetchall()
+    return {"tournament": {k: t[k] for k in ("id", "name", "sport", "status", "match_minutes")},
+            "now": now, "matches": rows}
+
+
+@router.get("/users")
+def school_users(role: str | None = None, user=Depends(require_admin), conn=Depends(get_conn)):
+    """People at the admin's school, e.g. ?role=scorer for the scorer picker."""
+    return conn.execute(
+        """select id, team_name, roles from users where school_id = %s and (%s::text is null or %s = any(roles))
+           order by team_name""", (user["school_id"], role, role)).fetchall()
 
 
 @router.post("/users/{user_id}/roles")

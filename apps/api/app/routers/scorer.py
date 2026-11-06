@@ -11,6 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.audit import audit
 from app.auth import require_roles
 from app.clock import utcnow
 from app.db import get_conn
@@ -18,7 +19,7 @@ from app.engines.scoring.engine import FOOTBALL_TIMED_EVENTS, STRUCTURAL_EVENTS
 from app.engines.scoring.rules import FOOTBALL, SCORING_RULES
 from app.errors import ApiError
 from app.live import lineup_entries
-from app.matches import load_match
+from app.matches import kick_off, load_match
 
 router = APIRouter(prefix="/scorer", tags=["scorer"])
 require_scorer = require_roles("scorer")
@@ -95,6 +96,7 @@ def scorer_match(match_id: UUID, user=Depends(require_scorer), conn=Depends(get_
     return {
         "id": match["id"], "sport": match["sport"], "status": match["status"], "role": role,
         "scheduled_start": match["scheduled_start"], "scheduled_minutes": match["scheduled_minutes"],
+        "kicked_off_at": match["kicked_off_at"],
         "home_team": match["home_team"], "away_team": match["away_team"],
         "event_types": sorted(_event_types(match)),
         "timed_events": sorted(FOOTBALL_TIMED_EVENTS) if match["sport"] == FOOTBALL else [],
@@ -104,6 +106,16 @@ def scorer_match(match_id: UUID, user=Depends(require_scorer), conn=Depends(get_
         "last_client_seq": max((e["client_seq"] for e in events), default=0),
         "submission": submission,
     }
+
+
+@router.post("/matches/{match_id}/kickoff")
+def scorer_kickoff(match_id: UUID, user=Depends(require_scorer), conn=Depends(get_conn), now=Depends(utcnow)):
+    """The scorer at the pitch starts the match clock when the referee does."""
+    _assignment(conn, match_id, user)
+    conn.execute("select id from matches where id = %s for update", (match_id,))
+    result = kick_off(conn, load_match(conn, match_id, published_only=False), now)
+    audit(conn, user["id"], "match.kickoff", "match", match_id)
+    return result
 
 
 @router.post("/matches/{match_id}/events")
