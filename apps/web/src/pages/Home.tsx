@@ -38,10 +38,10 @@ export default function Home() {
       {results.length > 0 && <h3>Results</h3>}
       <ul className="list">{results.map((m) => <Row key={m.id} m={m} />)}</ul>
 
-      {tournaments.length > 0 && <h3>Season tables</h3>}
+      {tournaments.length > 0 && <h3>Tournaments</h3>}
       <ul className="list">
         {tournaments.map(([id, name]) => (
-          <li key={id}><a className="row-card" href={`#/table/${id}`}><strong>{name}</strong><span aria-hidden>→</span></a></li>
+          <li key={id}><a className="row-card" href={`#/tournament/${id}`}><span><strong>{name}</strong><span className="muted small block">Table, results, top scorers, bracket</span></span><span aria-hidden>→</span></a></li>
         ))}
       </ul>
     </section>

@@ -15,7 +15,7 @@ export default function SeasonTable({ tournamentId }: { tournamentId: string }) 
   if (!data) return <Skeleton rows={6} />
   return (
     <section>
-      <PageHeader title={data.name} back="#/" subtitle="Season table" />
+      <PageHeader title={data.name} back={`#/tournament/${tournamentId}`} subtitle="Fantasy season table" />
       <p className="muted">Season table: your best team from each finished match, added up.
         {' '}{data.matches_confirmed} match{data.matches_confirmed === 1 ? '' : 'es'} counted so far.</p>
       <Table rows={data.entries.map((e) => ({ key: e.team_name, rank: e.rank, name: e.team_name, points: e.points,

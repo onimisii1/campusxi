@@ -36,8 +36,8 @@ export default function MatchCard({ match }: { match: MatchCardData }) {
 
   return (
     <article className="hero" aria-label={`${match.home_team.name} vs ${match.away_team.name}`}>
+      <a className="hero-tournament small" href={`#/tournament/${match.tournament_id}`}>{match.tournament} · table ›</a>
       <a className="hero-title" href={base}>
-        <span className="small">{match.tournament}</span>
         <strong>{match.home_team.name} <span className="vs">vs</span> {match.away_team.name}</strong>
         {match.status === 'live' && <span className="pill-live">● Live</span>}
       </a>
