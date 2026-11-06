@@ -1,4 +1,4 @@
-"""Add or change the payment keys in apps/api/.env, then check they work.
+r"""Add or change the payment keys in apps/api/.env, then check they work.
 
     Windows: double-click apps/api/set-payment-keys.cmd (or run it with --check)
     PowerShell, from apps/api:  .\.venv\Scripts\python.exe scripts\set_payment_keys.py [--check]
