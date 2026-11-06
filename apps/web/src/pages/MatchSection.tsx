@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api'
 import ContestCard from '../components/ContestCard'
+import JoinContestSheet from '../components/JoinContestSheet'
 import MyBetRow, { type MyBet } from '../components/MyBetRow'
-import type { Contest } from '../contests'
+import { openFor, type Contest } from '../contests'
 import PageHeader from '../components/PageHeader'
 import Shirt from '../components/Shirt'
 import { kickoff, points, statusLabel } from '../format'
@@ -45,7 +46,7 @@ export const SECTIONS = {
 } as const
 export type Section = keyof typeof SECTIONS
 
-export default function MatchSection({ matchId, section }: { matchId: string; section: Section }) {
+export default function MatchSection({ matchId, section, focus }: { matchId: string; section: Section; focus?: string }) {
   const { data: match, error } = useApi<Match>(`/matches/${matchId}`)
 
   if (error) return <p className="error">{error}</p>
@@ -57,7 +58,7 @@ export default function MatchSection({ matchId, section }: { matchId: string; se
         subtitle={`${match.home_team.name} vs ${match.away_team.name} · ${
           match.locked ? statusLabel(match.status) : `Deadline ${kickoff(match.scheduled_start)}`}`} />
       {section === 'contests' && <ContestsTab match={match} />}
-      {section === 'teams' && <TeamsTab match={match} />}
+      {section === 'teams' && <TeamsTab match={match} focus={focus} />}
       {section === 'live' && <LiveTab match={match} />}
       {section === 'challenges' && <ChallengesTab match={match} />}
     </section>
@@ -99,18 +100,36 @@ function ContestsTab({ match }: { match: Match }) {
   )
 }
 
-function TeamsTab({ match }: { match: Match }) {
+function TeamsTab({ match, focus }: { match: Match; focus?: string }) {
   const { status } = useSession()
   const { data: teams } = useApi<Team[]>(status === 'ready' ? `/me/teams?match_id=${match.id}` : null)
+  const { data: contests, reload } = useApi<Contest[]>(`/matches/${match.id}/contests`)
+  const [sheet, setSheet] = useState<{ team: Team; fresh: boolean } | null>(null)
+
+  // Straight after building a team, offer to enter it in a contest.
+  useEffect(() => {
+    const team = focus ? teams?.find((t) => t.id === focus) : undefined
+    if (team && contests && openFor(contests, team.id).length > 0) setSheet({ team, fresh: true })
+    if (focus && team) window.history.replaceState(null, '', `#/match/${match.id}/teams`)
+  }, [focus, teams, contests, match.id])
+
   if (status === 'signed_out') return <NeedSignIn what="build teams" />
   return (
     <div>
       {teams?.length === 0 && <p className="muted">You have no teams for this match yet.</p>}
-      {teams?.map((t) => <TeamCard key={t.id} team={t} match={match} />)}
+      {teams?.map((t) => (
+        <TeamCard key={t.id} team={t} match={match} contests={contests}
+          onJoin={() => setSheet({ team: t, fresh: false })} />
+      ))}
       {(!match.locked || match.late_join_until !== null) && (teams?.length ?? 0) < 10 && (
         <a className="primary as-button" href={`#/build/${match.id}`}>
           {match.locked ? `+ New late team (points count from now, until ${match.late_join_until}′)` : '+ New team'}
         </a>
+      )}
+      {sheet && (
+        <JoinContestSheet teamId={sheet.team.id} teamLabel={sheet.team.label} fresh={sheet.fresh}
+          contests={openFor(contests, sheet.team.id)} onClose={() => setSheet(null)}
+          onJoined={() => { setSheet(null); reload() }} />
       )}
     </div>
   )
@@ -119,7 +138,9 @@ function TeamsTab({ match }: { match: Match }) {
 const BADGE: Record<string, string> = { captain: 'C', vice_captain: 'V', key: 'K' }
 
 /** A saved team on a small pitch; after kick-off each nameplate shows the player's points. */
-function TeamCard({ team, match }: { team: Team; match: Match }) {
+function TeamCard({ team, match, contests, onJoin }: {
+  team: Team; match: Match; contests: Contest[] | null; onJoin: () => void
+}) {
   const { data: bd } = useApi<Breakdown>(match.locked ? `/teams/${team.id}/breakdown` : null)
   const picks: Pick[] = bd?.picks ?? team.picks
   const colours = sideColours(match.home_team, match.away_team)
@@ -151,6 +172,22 @@ function TeamCard({ team, match }: { team: Team; match: Match }) {
           </div>
         ))}
       </div>
+      <TeamContests team={team} contests={contests} onJoin={onJoin} />
+    </div>
+  )
+}
+
+/** Which contests a team is in, and a button to enter more. */
+function TeamContests({ team, contests, onJoin }: { team: Team; contests: Contest[] | null; onJoin: () => void }) {
+  if (!contests) return null
+  const inIt = contests.filter((c) => c.my_entries.some((e) => e.fantasy_team_id === team.id))
+  const open = openFor(contests, team.id)
+  return (
+    <div className="team-contests">
+      <span className="small muted">{inIt.length ? `In: ${inIt.map((c) => c.name).join(', ')}` : 'Not in a contest yet'}</span>
+      {open.length > 0 && (
+        <button className="join-btn" onClick={onJoin}>{inIt.length ? '+ Join another' : 'Join a contest'}</button>
+      )}
     </div>
   )
 }

@@ -22,7 +22,7 @@ function Page({ route }: { route: string[] }) {
   const [page, a, b, c] = route
   switch (page) {
     case 'match':
-      if (b && b in SECTIONS) return <MatchSection key={`${a}/${b}`} matchId={a} section={b as Section} />
+      if (b && b in SECTIONS) return <MatchSection key={`${a}/${b}`} matchId={a} section={b as Section} focus={c} />
       return <MatchHub key={a} matchId={a} />
     case 'build': return <PickTeam key={`${a}/${b ?? 'new'}`} matchId={a} teamId={b} />
     case 'contest': return <ContestBoard key={a} contestId={a} />

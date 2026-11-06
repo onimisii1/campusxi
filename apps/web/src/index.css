@@ -1638,3 +1638,18 @@ details.card summary {
 .check-row.on {
   background: color-mix(in srgb, var(--brand) 12%, transparent);
 }
+
+/* team card: contests it's in + join */
+.team-contests {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.join-list li {
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}

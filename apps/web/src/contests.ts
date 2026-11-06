@@ -28,3 +28,8 @@ export function feeLabel(c: Contest): string {
 export function joinable(c: Contest): boolean {
   return c.status === 'open' && c.spots_left > 0 && (!c.locked || c.late_join !== null)
 }
+
+/** Contests a team can still enter (open, spots left, not already entered with that team). */
+export function openFor(contests: Contest[] | null, teamId: string): Contest[] {
+  return (contests ?? []).filter((c) => joinable(c) && !c.my_entries.some((e) => e.fantasy_team_id === teamId))
+}

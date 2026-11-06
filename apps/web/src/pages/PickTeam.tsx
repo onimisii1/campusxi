@@ -126,10 +126,15 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
     setErrors([])
     const body = { picks: [...picks].map(([athlete_id, role]) => ({ athlete_id, role })) }
     try {
-      if (teamId) await api(`/teams/${teamId}`, token, { method: 'PUT', body })
-      else await api(`/matches/${matchId}/teams`, token, { method: 'POST', body })
-      toast(teamId ? 'Team updated' : 'Team saved')
-      go(`/match/${matchId}/teams`)
+      if (teamId) {
+        await api(`/teams/${teamId}`, token, { method: 'PUT', body })
+        toast('Team updated')
+        go(`/match/${matchId}/teams`)
+      } else {
+        // A new team goes straight to "join a contest" with it.
+        const created = await api<{ id: string }>(`/matches/${matchId}/teams`, token, { method: 'POST', body })
+        go(`/match/${matchId}/teams/${created.id}`)
+      }
     } catch (e) {
       setErrors(e instanceof ApiError && Array.isArray(e.details) ? e.details.map(String) : [errorText(e)])
     } finally {
