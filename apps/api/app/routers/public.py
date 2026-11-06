@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends
 
 from app.auth import optional_user
 from app.clock import utcnow
-from app.competition import bracket, player_stats, scoreline, standings
+from app.competition import (bracket, fantasy_scores, last_match_points, pick_share, played_matches,
+                             player_stats, scoreline, standings)
 from app.db import get_conn
 from app.engines.payouts import final_ranks
 from app.errors import ApiError
@@ -237,9 +238,50 @@ def get_match(match_id: UUID, conn=Depends(get_conn), now=Depends(utcnow)):
     out = _card(m, now, conn)
     out["scheduled_minutes"] = m["scheduled_minutes"]
     out["squads"] = {"home": [], "away": []}
+    last = last_match_points(conn, m)
+    share = pick_share(conn, match_id) if is_locked(m, now) else {}   # hidden until lock, like FantasyFi
     for a in squad(conn, m):
         side = "home" if a["team_id"] == m["home_team_id"] else "away"
         status = None if a["id"] not in lineup else ("starting" if lineup[a["id"]] else "bench")
+        prev = last.get(str(a["id"]))
         out["squads"][side].append({"id": a["id"], "name": a["display_name"], "position": a["position"],
-                                    "lineup": status})
+                                    "lineup": status, "last_points": prev["points"] if prev else None,
+                                    "played_last": prev["played"] if prev else False,
+                                    "picked_pct": share.get(str(a["id"]))})
     return out
+
+
+@router.get("/athletes/{athlete_id}")
+def athlete_profile(athlete_id: UUID, conn=Depends(get_conn)):
+    """A player's page: team, tournament stats, and fantasy points match by match."""
+    a = conn.execute(
+        """select a.id, a.display_name, a.position, t.id as team_id, t.name as team, t.colour,
+                  tr.id as tournament_id, tr.name as tournament, tr.sport, tr.status
+           from athletes a join teams t on t.id = a.team_id join tournaments tr on tr.id = t.tournament_id
+           where a.id = %s""", (athlete_id,)).fetchone()
+    if a is None or a["status"] != "published":
+        raise ApiError(404, "athlete_not_found", "player not found")
+    t = {"id": a["tournament_id"], "sport": a["sport"]}
+    stats = player_stats(conn, t)
+    line = next((p for p in stats["players"] if p["athlete_id"] == str(athlete_id)), None)
+    matches = []
+    for row in played_matches(conn, a["tournament_id"], [a["team_id"]]):
+        m = load_match(conn, row["id"])
+        sc = fantasy_scores(conn, m["id"]).get(str(athlete_id))
+        home = m["home_team_id"] == a["team_id"]
+        result = conn.execute("select home_score, away_score from match_results where match_id = %s",
+                              (m["id"],)).fetchone()
+        share = pick_share(conn, m["id"]).get(str(athlete_id))
+        matches.append({
+            "match_id": m["id"], "code": m["code"], "scheduled_start": m["scheduled_start"],
+            "opponent": m["away_team"] if home else m["home_team"],
+            "score": f"{result['home_score']}–{result['away_score']}" if home
+                     else f"{result['away_score']}–{result['home_score']}",
+            "played": bool(sc and sc.breakdown), "points": sc.points if sc else 0,
+            "breakdown": [{"label": lbl, "points": pts} for lbl, pts in (sc.breakdown if sc else [])],
+            "picked_pct": share})
+    return {"id": a["id"], "name": a["display_name"], "position": a["position"],
+            "team": {"id": a["team_id"], "name": a["team"], "colour": a["colour"]},
+            "tournament": {"id": a["tournament_id"], "name": a["tournament"], "sport": a["sport"]},
+            "stats_kind": stats["kind"], "stats": line, "matches": matches,
+            "total_points": sum((x["points"] for x in matches), Decimal(0))}

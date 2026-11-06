@@ -11,6 +11,7 @@ import MatchSection, { SECTIONS, type Section } from './pages/MatchSection'
 import MePage from './pages/MePage'
 import MyChallenges from './pages/MyChallenges'
 import PickTeam from './pages/PickTeam'
+import PlayerPage from './pages/PlayerPage'
 import ProfilePage from './pages/ProfilePage'
 import SeasonTable from './pages/SeasonTable'
 import SignInPage from './pages/SignInPage'
@@ -28,6 +29,7 @@ function Page({ route }: { route: string[] }) {
     case 'build': return <PickTeam key={`${a}/${b ?? 'new'}`} matchId={a} teamId={b} />
     case 'contest': return <ContestBoard key={a} contestId={a} />
     case 'table': return <SeasonTable key={a} tournamentId={a} />
+    case 'player': return <PlayerPage key={a} athleteId={a} />
     case 'tournament': return <TournamentPage key={a} tournamentId={a} />
     case 'challenge': return <ChallengeInvite key={a} token={a} />
     case 'challenges': return <MyChallenges />

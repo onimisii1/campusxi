@@ -1796,3 +1796,74 @@ table.league tr.qualify td {
 .tie-side.won b {
   color: #19a68f;
 }
+
+/* ---------- player profiles ---------- */
+.plain-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.player-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--hero-a), var(--hero-b));
+  color: #fff;
+}
+
+.player-hero .muted {
+  color: rgb(255 255 255 / 80%);
+}
+
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.stat-tiles div {
+  display: grid;
+  text-align: center;
+  padding: 10px 4px;
+  border-radius: 12px;
+  background: var(--tile);
+}
+
+.stat-tiles b {
+  font-size: 1.3rem;
+}
+
+.stat-tiles span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.pts-big {
+  font-size: 1.3rem;
+}
+
+.played-badge {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  background: color-mix(in srgb, #19a68f 18%, transparent);
+  color: #19a68f;
+}
+
+.last-pts {
+  display: grid;
+  text-align: center;
+  min-width: 40px;
+  font-weight: 700;
+}
+
+.last-pts small {
+  font-weight: 400;
+  font-size: 0.7rem;
+  color: var(--muted);
+}

@@ -149,7 +149,8 @@ function PlayerStats({ tournamentId }: { tournamentId: string }) {
             {data.players.map((p) => (
               <tr key={p.athlete_id}>
                 <td>{p.rank}{p.shared ? '=' : ''}</td>
-                <td><span className="row-team"><TeamChip team={p.team} /><span className="ellipsis">{p.name}</span></span></td>
+                <td><a className="row-team plain-link" href={`#/player/${p.athlete_id}`}><TeamChip team={p.team} />
+                  <span className="ellipsis">{p.name}</span></a></td>
                 <td>{p.matches}</td>
                 {mvp
                   ? <><td>{p.points}</td><td>{p.rebounds}</td><td>{p.assists}</td><td>{p.steals}</td><td>{p.blocks}</td>

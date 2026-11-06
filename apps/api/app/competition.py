@@ -8,7 +8,7 @@ from collections import Counter, defaultdict
 from decimal import Decimal
 
 from app.engines.scoring.rules import BASKETBALL, FOOTBALL
-from app.live import lineup_entries, official_or_primary_scorer, tallies
+from app.live import lineup_entries, official_or_primary_scorer, stream_scores, tallies
 
 LEAGUE_POINTS = {FOOTBALL: {"W": 3, "D": 1, "L": 0}, BASKETBALL: {"W": 2, "D": 1, "L": 0}}
 DEFAULT_POINTS = {"W": 3, "D": 1, "L": 0}
@@ -179,3 +179,45 @@ def bracket(conn, tournament: dict) -> dict:
         (tie(m) for m in ko if m["stage"] == "third_place"), None),
         "suggested_semis": [[table[a - 1]["team"] if len(table) >= a else None,
                              table[b - 1]["team"] if len(table) >= b else None] for a, b in SEMI_PAIRS]}
+
+
+def played_matches(conn, tournament_id, team_ids, before=None) -> list:
+    """Confirmed, actually played matches (no walkovers) involving these teams, newest first."""
+    return conn.execute(
+        """select m.id from matches m join match_results r on r.match_id = m.id
+           where m.tournament_id = %s and m.status = 'confirmed' and not r.walkover
+             and (m.home_team_id = any(%s) or m.away_team_id = any(%s))
+             and (%s::timestamptz is null or m.scheduled_start < %s)
+           order by m.scheduled_start desc""", (tournament_id, team_ids, team_ids, before, before)).fetchall()
+
+
+def fantasy_scores(conn, match_id) -> dict:
+    """{athlete_id: AthleteScore} from the official stream of a confirmed match."""
+    from app.matches import load_match
+    m = load_match(conn, match_id, published_only=False)
+    return stream_scores(conn, m, official_or_primary_scorer(conn, m))
+
+
+def last_match_points(conn, match: dict) -> dict:
+    """For the team builder: each athlete's fantasy points in their team's previous match,
+    and whether they played in it. {athlete_id: {"points", "played"}}."""
+    out = {}
+    for team in (match["home_team_id"], match["away_team_id"]):
+        prev = played_matches(conn, match["tournament_id"], [team], match["scheduled_start"])
+        if not prev:
+            continue
+        for aid, sc in fantasy_scores(conn, prev[0]["id"]).items():
+            out[aid] = {"points": sc.points, "played": bool(sc.breakdown)}
+    return out
+
+
+def pick_share(conn, match_id) -> dict:
+    """{athlete_id: % of fantasy teams for this match that picked them}."""
+    total = conn.execute("select count(*) as n from fantasy_teams where match_id = %s", (match_id,)).fetchone()["n"]
+    if not total:
+        return {}
+    rows = conn.execute(
+        """select p.athlete_id, count(*) as n from fantasy_team_picks p
+           join fantasy_teams t on t.id = p.fantasy_team_id where t.match_id = %s group by p.athlete_id""",
+        (match_id,)).fetchall()
+    return {str(r["athlete_id"]): round(100 * r["n"] / total) for r in rows}

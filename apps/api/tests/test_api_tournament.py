@@ -142,3 +142,19 @@ def test_bracket_placeholders_then_knockouts(client, db):
     assert (b["final"]["home"], b["final"]["away"], b["final"]["placeholder"]) == ("Winner SF1", "Winner SF2", True)
     # knockout matches stay out of the league table
     assert sum(r["played"] for r in client.get(f"/tournaments/{t['id']}/standings").json()["rows"]) == 4
+
+
+def test_player_profile_and_last_match_points(client, db):
+    t, admin = _setup(client, db, "football", FOOTBALL_SQUADS, FOOTBALL_RESULTS, FOOTBALL_STATS)
+    cards = {m["code"]: m for m in client.get("/matches", params={"tournament_id": t["id"]}).json()}
+    squads = client.get(f"/matches/{cards['X4']['id']}").json()["squads"]       # CPE v PGE, after M3
+    cpe = {a["name"]: a for a in squads["home"]}
+    # Alvin Zika: +4 (started) + 50 (MID goal) in M3; Kolo (PGE) hasn't played yet
+    assert cpe["Alvin Zika"]["last_points"] == 54 and cpe["Alvin Zika"]["played_last"] is True
+    assert squads["away"][0]["last_points"] is None and squads["away"][0]["picked_pct"] is None
+
+    prof = client.get(f"/athletes/{cpe['Alvin Zika']['id']}").json()
+    assert (prof["team"]["name"], prof["stats_kind"], prof["stats"]["goals"]) == ("CPE", "golden_boot", 1)
+    assert [(m["code"], m["opponent"], m["score"], m["points"]) for m in prof["matches"]] == [("M3", "CVE", "2–1", 54)]
+    assert prof["total_points"] == 54
+    assert client.get("/athletes/00000000-0000-0000-0000-000000000000").status_code == 404

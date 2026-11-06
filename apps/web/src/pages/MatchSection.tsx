@@ -210,7 +210,8 @@ function LiveTab({ match }: { match: Match }) {
         {live?.athletes.map((a) => (
           <li key={a.id} onClick={() => setOpen(open === a.id ? null : a.id)}>
             <span>{a.name} <small className="muted">{a.position} · {a.side === 'home' ? match.home_team.name : match.away_team.name}</small>
-              {open === a.id && <small className="muted block">{a.breakdown.map((b) => `${b.label} ${b.points > 0 ? '+' : ''}${points(b.points)}`).join(', ') || 'No points yet'}</small>}
+              {open === a.id && <small className="muted block">{a.breakdown.map((b) => `${b.label} ${b.points > 0 ? '+' : ''}${points(b.points)}`).join(', ') || 'No points yet'}
+                {' '}<a href={`#/player/${a.id}`} onClick={(e) => e.stopPropagation()}>Profile →</a></small>}
             </span>
             <strong>{points(a.points)}</strong>
           </li>

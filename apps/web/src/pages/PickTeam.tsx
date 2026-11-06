@@ -5,14 +5,15 @@ import Shirt from '../components/Shirt'
 import Skeleton from '../components/Skeleton'
 import { quickPick } from '../quickPick'
 import { useToast } from '../toast'
-import { deadline } from '../format'
+import { deadline, points } from '../format'
 import { go, signInThenReturn } from '../router'
 import { ROLES, TEAM_RULES, type Group, type Role } from '../rules'
 import { useSession } from '../session'
 import { shortName, sideColours, teamCode } from '../teamStyle'
 import { errorText, useApi } from '../useApi'
 
-type SquadAthlete = { id: string; name: string; position: string; lineup: 'starting' | 'bench' | null }
+type SquadAthlete = { id: string; name: string; position: string; lineup: 'starting' | 'bench' | null
+  last_points?: number | string | null; played_last?: boolean; picked_pct?: number | null }
 type MatchDetail = {
   id: string
   sport: string
@@ -265,7 +266,8 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
                       return (
                         <li key={a.id} className={`lu-row ${on ? 'on' : ''}`}>
                           <span className="grow">{shortName(a.name)}
-                            <small className="muted block">{a.position}{a.lineup === 'bench' ? ' · bench' : a.lineup ? '' : ' · squad'}</small></span>
+                            <small className="muted block">{a.position}{a.lineup === 'bench' ? ' · bench' : a.lineup ? '' : ' · squad'}
+                              {a.last_points !== null && a.last_points !== undefined ? ` · ${points(a.last_points)} last` : ''}</small></span>
                           <button className={on ? 'add on' : 'add'} disabled={!on && !!reason} title={reason ?? undefined}
                             onClick={() => (on ? remove(a.id) : add(a.id))}
                             aria-label={`${on ? 'Remove' : 'Add'} ${a.name}, ${a.teamName}, ${a.position}`}>{on ? '✓' : '+'}</button>
@@ -296,6 +298,11 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
                 <span className="grow">
                   {a.name}
                   <span className="muted small block">{a.teamName} · {a.position}{a.lineup ? ` · ${a.lineup}` : ''}</span>
+                  {a.played_last && <span className="played-badge">▶ Played last match</span>}
+                </span>
+                <span className="last-pts" title="Fantasy points in their team's last match">
+                  {a.last_points !== null && a.last_points !== undefined ? points(a.last_points) : '–'}
+                  <small>last</small>
                 </span>
                 <button className="add" disabled={!!reason} title={reason ?? undefined} onClick={() => add(a.id)}
                   aria-label={`Add ${a.name}, ${a.teamName}, ${a.position}`}>+</button>
