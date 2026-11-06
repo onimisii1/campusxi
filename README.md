@@ -155,7 +155,10 @@ only code that writes it, and every transaction must balance.
 1. Production Supabase project; set `DATABASE_URL`, `SUPABASE_URL` (and the web app's
    `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
 2. **Payment keys** (environment only, never in git): `PAYSTACK_SECRET_KEY`, `FLUTTERWAVE_SECRET_KEY`,
-   `FLUTTERWAVE_WEBHOOK_HASH`. Point the dashboards' webhooks at
+   `FLUTTERWAVE_WEBHOOK_HASH`. Locally, run `.venv/Scripts/python scripts/set_payment_keys.py` in
+   `apps/api`: it asks for the keys (hidden input), saves them to the gitignored `apps/api/.env`,
+   and checks them with read-only calls (`--check` re-checks later). Test keys first; live keys
+   must be confirmed by typing LIVE. Point the dashboards' webhooks at
    `https://<api>/payments/paystack/webhook` and `https://<api>/payments/flutterwave/webhook`.
    Set `PUBLIC_APP_URL` to the web app's address (checkout returns there).
 3. **KYC provider:** add a class in `app/kyc/` for the chosen provider (Dojah, Prembly, Smile ID, ...),

@@ -6,6 +6,8 @@ database; every test gets a fresh copy of it, so tests never share state and the
 append-only tables never need truncating.
 """
 import os
+
+os.environ["CAMPUSXI_IGNORE_DOTENV"] = "1"   # tests never read the developer's local apps/api/.env
 import pathlib
 import uuid
 from datetime import datetime, timedelta, timezone
