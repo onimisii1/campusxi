@@ -1,7 +1,8 @@
-"""Contests (PRD 5.4, 8.4) and leaderboards (PRD F3). Phase 4 runs free contests only."""
+"""Contests (PRD 5.4, 8.4) and leaderboards (PRD F3). Paid entries hold the fee in the wallet
+until settlement (app/settlement.py); prizes are paid after the dispute hold (app/jobs.py)."""
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from app.audit import audit
@@ -9,7 +10,10 @@ from app.auth import current_user, optional_user, require_admin
 from app.clock import utcnow
 from app.config import settings
 from app.db import get_conn
-from app.engines.payouts import final_ranks, payout_table
+from app import wallet
+from app.engines.payouts import final_ranks, min_fill, payout_table, validate_contest
+from app.gate import require_paid_play
+from app.idempotency import Idempotent
 from app.errors import ApiError
 from app.fantasy import late_watermark, totals_since
 from app.live import official_or_primary_scorer, stream_scores
@@ -58,8 +62,31 @@ def create_free_contest(conn, match_id, name="Free contest", capacity=None, team
     ).fetchone()
 
 
+MINI_FEE = 40_000          # the N400 Mini ticket
+MIN_STANDARD_FEE = 100_000  # standard contests start at N1,000
+
+
 def _no_paid_play():
-    raise ApiError(403, "paid_play_unavailable", "paid contests open once CampusXI is licensed")
+    raise ApiError(403, "paid_play_unavailable", "paid contests aren't open yet")
+
+
+def assert_not_scorer(conn, user_id, match_id):
+    """Scorers control the data, so they can't put money on the matches they score."""
+    if conn.execute("select 1 from match_scorers where match_id = %s and user_id = %s", (match_id, user_id)).fetchone():
+        raise ApiError(403, "scorer_conflict", "you're scoring this match, so you can't play it for money")
+
+
+def create_paid_contest(conn, match_id, name, capacity, fee, team_cap=10, prize_text=None):
+    if fee != MINI_FEE and fee < MIN_STANDARD_FEE:
+        raise ApiError(422, "bad_fee", "entry is ₦400 (Mini) or from ₦1,000")
+    errors = validate_contest(capacity, fee)
+    if errors:
+        raise ApiError(422, "unfundable", errors[0], errors)
+    return conn.execute(
+        """insert into contests (match_id, name, capacity, entry_fee_kobo, min_fill, team_cap, prize_text, is_mini)
+           values (%s, %s, %s, %s, %s, %s, %s, %s) returning *""",
+        (match_id, name, capacity, fee, max(2, min_fill(capacity)), team_cap, prize_text, fee == MINI_FEE),
+    ).fetchone()
 
 
 @router.post("/admin/matches/{match_id}/contests", status_code=201)
@@ -69,10 +96,15 @@ def add_contest(match_id: UUID, body: ContestIn, user=Depends(require_admin), co
     if "superadmin" not in user["roles"] and user["school_id"] != m["school_id"]:
         raise ApiError(403, "other_school", "you can only manage your own school")
     assert_open(m, now)
-    if body.entry_fee_kobo and not settings.paid_play_enabled:
-        _no_paid_play()
-    c = create_free_contest(conn, match_id, body.name, body.capacity, body.team_cap, body.prize_text)
-    audit(conn, user["id"], "contest.create", "contest", c["id"], name=c["name"], capacity=c["capacity"])
+    if body.entry_fee_kobo:
+        if not settings.paid_play_enabled:
+            _no_paid_play()
+        c = create_paid_contest(conn, match_id, body.name, body.capacity, body.entry_fee_kobo, body.team_cap,
+                                body.prize_text)
+    else:
+        c = create_free_contest(conn, match_id, body.name, body.capacity, body.team_cap, body.prize_text)
+    audit(conn, user["id"], "contest.create", "contest", c["id"], name=c["name"], capacity=c["capacity"],
+          entry_fee_kobo=c["entry_fee_kobo"])
     return c
 
 
@@ -97,7 +129,8 @@ def list_contests(match_id: UUID, user=Depends(optional_user), conn=Depends(get_
     return [{
         "id": c["id"], "name": c["name"], "prize_text": c["prize_text"], "entry_fee_kobo": c["entry_fee_kobo"],
         "capacity": c["capacity"], "entries": c["entries"], "spots_left": c["capacity"] - c["entries"],
-        "team_cap": c["team_cap"], "status": c["status"], "locked": locked,
+        "team_cap": c["team_cap"], "status": c["status"], "locked": locked, "min_entries": c["min_fill"],
+        "is_mini": c["is_mini"],
         "late_join": None if late is None or c["status"] != "open" else {
             "until_minute": late["until_minute"], "minute": late["minute"],
             "entry_fee_kobo": late_fee(c["entry_fee_kobo"])},
@@ -142,8 +175,11 @@ def payout_preview(contest_id: UUID, conn=Depends(get_conn)):
 
 
 @router.post("/contests/{contest_id}/entries", status_code=201)
-def join_contest(contest_id: UUID, body: EntryIn, user=Depends(current_user), conn=Depends(get_conn),
-                 now=Depends(utcnow)):
+def join_contest(contest_id: UUID, body: EntryIn, request: Request, user=Depends(current_user),
+                 conn=Depends(get_conn), now=Depends(utcnow)):
+    idem = Idempotent(conn, user["id"], request)
+    if (prior := idem.replay()) is not None:
+        return prior
     contest = conn.execute("select * from contests where id = %s for update", (contest_id,)).fetchone()
     if contest is None:
         raise ApiError(404, "contest_not_found", "contest not found")
@@ -152,8 +188,10 @@ def join_contest(contest_id: UUID, body: EntryIn, user=Depends(current_user), co
     late = assert_open_or_late(conn, m, now)
     if contest["status"] != "open":
         raise ApiError(409, "contest_closed", "this contest is closed")
-    if contest["entry_fee_kobo"] and not settings.paid_play_enabled:
-        _no_paid_play()
+    fee = late_fee(contest["entry_fee_kobo"]) if late else contest["entry_fee_kobo"]
+    if fee:
+        require_paid_play(conn, user, now, fee)
+        assert_not_scorer(conn, user["id"], m["id"])
     team = conn.execute("select * from fantasy_teams where id = %s and user_id = %s",
                         (body.fantasy_team_id, user["id"])).fetchone()
     if team is None or team["match_id"] != contest["match_id"]:
@@ -165,7 +203,6 @@ def join_contest(contest_id: UUID, body: EntryIn, user=Depends(current_user), co
         raise ApiError(409, "contest_full", "this contest is full")
     if counts["mine"] >= contest["team_cap"]:
         raise ApiError(409, "team_cap", f"you can enter at most {contest['team_cap']} teams in this contest")
-    fee = late_fee(contest["entry_fee_kobo"]) if late else contest["entry_fee_kobo"]
     entry = conn.execute(
         """insert into contest_entries (contest_id, fantasy_team_id, user_id, fee_kobo,
                                         late_after_event_id, late_elapsed_minutes)
@@ -176,7 +213,10 @@ def join_contest(contest_id: UUID, body: EntryIn, user=Depends(current_user), co
     ).fetchone()
     if entry is None:
         raise ApiError(409, "already_entered", "that team is already in this contest")
-    return entry
+    if fee:
+        h = wallet.hold(conn, user["id"], fee, "contest_entry", entry["id"], now=now)
+        entry = {**entry, "paid_cash_kobo": h["cash_kobo"], "paid_bonus_kobo": h["bonus_kobo"]}
+    return idem.save(entry)
 
 
 @router.delete("/entries/{entry_id}", status_code=204)
@@ -187,6 +227,9 @@ def leave_contest(entry_id: UUID, user=Depends(current_user), conn=Depends(get_c
     if entry is None:
         raise ApiError(404, "entry_not_found", "entry not found")
     assert_open(load_match(conn, entry["match_id"]), now)
+    h = wallet.open_hold(conn, "contest_entry", entry_id)
+    if h:
+        wallet.release(conn, h, now, "refund")
     conn.execute("delete from contest_entries where id = %s", (entry_id,))
 
 

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 
 from app.auth import optional_user
 from app.clock import utcnow
-from app.competition import (bracket, fantasy_scores, last_match_points, pick_share, played_matches,
+from app.competition import (bracket, cached, fantasy_scores, last_match_points, pick_share, played_matches,
                              player_stats, scoreline, standings)
 from app.db import get_conn
 from app.engines.payouts import final_ranks
@@ -97,20 +97,22 @@ def _published(conn, tournament_id) -> dict:
 def tournament_standings(tournament_id: UUID, conn=Depends(get_conn)):
     """League table from confirmed results (walkovers included)."""
     t = _published(conn, tournament_id)
-    return {"tournament_id": t["id"], "sport": t["sport"], "rows": standings(conn, t)}
+    return {"tournament_id": t["id"], "sport": t["sport"],
+            "rows": cached(conn, t["id"], "standings", lambda: standings(conn, t))}
 
 
 @router.get("/tournaments/{tournament_id}/stats")
 def tournament_stats(tournament_id: UUID, conn=Depends(get_conn)):
     """Golden boot (football) or MVP table (basketball) from official stats."""
     t = _published(conn, tournament_id)
-    return {"tournament_id": t["id"], "sport": t["sport"], **player_stats(conn, t)}
+    return {"tournament_id": t["id"], "sport": t["sport"],
+            **cached(conn, t["id"], "stats", lambda: player_stats(conn, t))}
 
 
 @router.get("/tournaments/{tournament_id}/bracket")
 def tournament_bracket(tournament_id: UUID, conn=Depends(get_conn)):
     t = _published(conn, tournament_id)
-    return {"tournament_id": t["id"], **bracket(conn, t)}
+    return {"tournament_id": t["id"], **cached(conn, t["id"], "bracket", lambda: bracket(conn, t))}
 
 
 @router.get("/tournaments/{tournament_id}/leaderboard")

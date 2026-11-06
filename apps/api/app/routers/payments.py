@@ -11,6 +11,7 @@ from app.config import settings
 from app.db import get_conn
 from app.errors import ApiError
 from app.gate import require_deposit_allowed
+from app.idempotency import Idempotent
 from app import wallet
 from app.payments import ProviderError, configured, service
 
@@ -22,11 +23,14 @@ class DepositIn(BaseModel):
 
 
 @router.post("/wallet/deposits", status_code=201)
-def deposit(body: DepositIn, user=Depends(current_user), identity: Identity = Depends(current_identity),
-            conn=Depends(get_conn), now=Depends(utcnow)):
+def deposit(body: DepositIn, request: Request, user=Depends(current_user),
+            identity: Identity = Depends(current_identity), conn=Depends(get_conn), now=Depends(utcnow)):
     """Start a deposit: returns the provider's checkout link. Money is credited only after we verify it."""
+    idem = Idempotent(conn, user["id"], request)
+    if (prior := idem.replay()) is not None:
+        return prior
     require_deposit_allowed(conn, user, now, body.amount_kobo)
-    return service.start_deposit(conn, user, body.amount_kobo, identity.email, now)
+    return idem.save(service.start_deposit(conn, user, body.amount_kobo, identity.email, now))
 
 
 @router.get("/wallet/deposits/{reference}")
@@ -84,9 +88,13 @@ class WithdrawIn(BaseModel):
 
 
 @router.post("/wallet/withdrawals", status_code=201)
-def withdraw(body: WithdrawIn, user=Depends(current_user), conn=Depends(get_conn), now=Depends(utcnow)):
+def withdraw(body: WithdrawIn, request: Request, user=Depends(current_user), conn=Depends(get_conn),
+             now=Depends(utcnow)):
+    idem = Idempotent(conn, user["id"], request)
+    if (prior := idem.replay()) is not None:
+        return prior
     w = service.request_withdrawal(conn, user, body.amount_kobo, body.bank_account_id, now)
-    return _w(w)
+    return idem.save(_w(w))
 
 
 @router.get("/me/withdrawals")

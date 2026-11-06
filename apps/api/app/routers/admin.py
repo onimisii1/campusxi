@@ -439,19 +439,19 @@ def walkover(match_id: UUID, body: WalkoverIn, user=Depends(require_admin), conn
         """insert into match_results (match_id, home_score, away_score, winner, confirmed_by, confirmed_at, walkover)
            values (%s, %s, %s, %s, %s, %s, true)""", (match_id, home, away, body.winner, user["id"], now))
     conn.execute("update matches set status = 'confirmed' where id = %s", (match_id,))
-    void_match(conn, match_id)
+    void_match(conn, match_id, now)
     audit(conn, user["id"], "match.walkover", "match", match_id, winner=body.winner)
     return {"match_id": match_id, "status": "confirmed", "walkover": True, "winner": body.winner,
             "home_score": home, "away_score": away}
 
 
 @router.post("/matches/{match_id}/abandon")
-def abandon(match_id: UUID, user=Depends(require_admin), conn=Depends(get_conn)):
+def abandon(match_id: UUID, user=Depends(require_admin), conn=Depends(get_conn), now=Depends(utcnow)):
     m = _admin_match(conn, user, match_id)
     if m["status"] in ("confirmed", "abandoned"):
         raise ApiError(409, "cannot_abandon", f"this match is already {m['status']}")
     conn.execute("update matches set status = 'abandoned' where id = %s", (match_id,))
-    void_match(conn, match_id)
+    void_match(conn, match_id, now)
     audit(conn, user["id"], "match.abandon", "match", match_id, previous_status=m["status"])
     return {"match_id": match_id, "status": "abandoned"}
 
@@ -566,6 +566,20 @@ def update_athlete(athlete_id: UUID, body: AthletePatch, user=Depends(require_ad
     row = conn.execute("select id, display_name, position, active from athletes where id = %s",
                        (athlete_id,)).fetchone()
     return {**row, "changed": sorted(changes)}
+
+
+
+@router.get("/attention")
+def needs_attention(user=Depends(require_admin), conn=Depends(get_conn), now=Depends(utcnow)):
+    """Matches that should have finished (3h after kick-off with no confirmed result)."""
+    return conn.execute(
+        """select m.id, m.code, m.status, m.scheduled_start, m.tournament_id, h.name as home_team, a.name as away_team
+           from matches m join tournaments t on t.id = m.tournament_id
+           join teams h on h.id = m.home_team_id join teams a on a.id = m.away_team_id
+           where m.status in ('scheduled', 'lineup_out', 'live', 'final_pending')
+             and coalesce(m.kicked_off_at, m.scheduled_start) < %s - interval '3 hours'
+             and (%s or t.school_id = %s) order by m.scheduled_start""",
+        (now, "superadmin" in user["roles"], user["school_id"])).fetchall()
 
 
 @router.post("/users/{user_id}/roles")

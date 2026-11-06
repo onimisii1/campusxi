@@ -10,6 +10,30 @@ from decimal import Decimal
 from app.engines.scoring.rules import BASKETBALL, FOOTBALL
 from app.live import lineup_entries, official_or_primary_scorer, stream_scores, tallies
 
+_CACHE: dict = {}
+CACHE_SECONDS = 60
+
+
+def cached(conn, tournament_id, kind: str, compute):
+    """Tables, stats and brackets change only when results or stats do. The fingerprint (match count,
+    results, latest confirmation, stat-event count) catches every change; the TTL is a backstop."""
+    import time
+    fp = conn.execute(
+        """select count(*) as matches, count(r.match_id) as results, max(r.confirmed_at) as latest,
+                  max(m.created_at) as newest_match,
+                  (select count(*) from stat_events e join matches mm on mm.id = e.match_id
+                   where mm.tournament_id = %(t)s and mm.status = 'confirmed') as stats
+           from matches m left join match_results r on r.match_id = m.id where m.tournament_id = %(t)s""",
+        {"t": tournament_id}).fetchone()
+    key = (str(tournament_id), kind)
+    hit = _CACHE.get(key)
+    if hit and hit[0] == tuple(fp.values()) and time.monotonic() - hit[1] < CACHE_SECONDS:
+        return hit[2]
+    value = compute()
+    _CACHE[key] = (tuple(fp.values()), time.monotonic(), value)
+    return value
+
+
 LEAGUE_POINTS = {FOOTBALL: {"W": 3, "D": 1, "L": 0}, BASKETBALL: {"W": 2, "D": 1, "L": 0}}
 DEFAULT_POINTS = {"W": 3, "D": 1, "L": 0}
 MVP_WEIGHTS = {"point": Decimal(1), "rebound": Decimal("1.2"), "assist": Decimal("1.5"),

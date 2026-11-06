@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     flutterwave_webhook_hash: str = ""
     payment_providers: list[str] = ["paystack", "flutterwave"]   # order = preference; the next is the fallback
     public_app_url: str = "http://localhost:5180"  # where checkout sends players back to
+    # Background jobs (refunds at lock, payouts, reconciliation, coin expiry) in this process.
+    jobs_enabled: bool = False
+    rate_limit_enabled: bool = True
     # Every match gets one free contest automatically when fixtures are imported.
     default_free_contest_capacity: int = 1000
     # Browser origins allowed to call the API (comma-separated in the environment).
