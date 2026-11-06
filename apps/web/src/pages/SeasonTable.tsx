@@ -1,4 +1,5 @@
 import PageHeader from '../components/PageHeader'
+import Skeleton from '../components/Skeleton'
 import { useApi } from '../useApi'
 import { Table } from './ContestBoard'
 
@@ -11,7 +12,7 @@ type Season = {
 export default function SeasonTable({ tournamentId }: { tournamentId: string }) {
   const { data, error } = useApi<Season>(`/tournaments/${tournamentId}/leaderboard`)
   if (error) return <p className="error">{error}</p>
-  if (!data) return <p className="muted">Loading…</p>
+  if (!data) return <Skeleton rows={6} />
   return (
     <section>
       <PageHeader title={data.name} back="#/" subtitle="Season table" />

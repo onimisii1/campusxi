@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError, OfflineError } from '../api'
 import { recall, remember } from '../cache'
+import { buzz, useToast } from '../toast'
 import { buttonsFor, eventLabel, type EventButton } from './events'
 import { EventQueue, queueKey, type EventResult, type QueuedEvent } from './queue'
 
@@ -44,6 +45,7 @@ export default function MatchScreen(props: { matchId: string; scorerId: string; 
   const [notice, setNotice] = useState<string | null>(null)
   const minute = useMatchMinute(matchId)
   const flushing = useRef(false)
+  const toast = useToast()
 
   const refresh = useCallback(async () => {
     try {
@@ -110,6 +112,9 @@ export default function MatchScreen(props: { matchId: string; scorerId: string; 
       amount: button.amount ?? 1,
       reverses_client_seq: null,
     })
+    buzz()
+    const who = detail.lineup.find((a) => a.id === athleteId)?.name ?? ''
+    toast(`${eventLabel(button.type, button.amount ?? 1)} · ${who}${detail.sport === 'football' ? ` · ${minute.value}′` : ''}`)
     setPending(queue.pending)
     setSelected(null)
     flush()
@@ -118,6 +123,8 @@ export default function MatchScreen(props: { matchId: string; scorerId: string; 
   function undo(e: ServerEvent | QueuedEvent) {
     queue.add({ athlete_id: e.athlete_id, event_type: e.event_type, minute: e.minute, amount: e.amount,
       reverses_client_seq: e.client_seq })
+    buzz(15)
+    toast(`Undone: ${eventLabel(e.event_type, e.amount)}`, 'bad')
     setPending(queue.pending)
     flush()
   }

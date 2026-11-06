@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import PageHeader from '../components/PageHeader'
+import Skeleton from '../components/Skeleton'
 import { kickoff } from '../format'
 import { go, signInThenReturn } from '../router'
 import { useSession } from '../session'
@@ -24,7 +25,7 @@ export default function ChallengeInvite({ token: inviteToken }: { token: string 
   const [msg, setMsg] = useState<string | null>(null)
 
   if (error) return <p className="error">{error}</p>
-  if (!invite) return <p className="muted">Loading…</p>
+  if (!invite) return <Skeleton rows={3} />
   const { match, creator } = invite
 
   async function accept() {

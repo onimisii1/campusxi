@@ -102,7 +102,7 @@ def publish_tournament(tournament_id: UUID, user=Depends(require_admin), conn=De
 async def import_squads(tournament_id: UUID, request: Request, user=Depends(require_admin),
                         conn=Depends(get_conn)):
     t = _tournament(conn, user, tournament_id)
-    rows, errors = parse_squads(await _csv_body(request), t["sport"])
+    rows, colours, errors = parse_squads(await _csv_body(request), t["sport"])
     if errors:
         raise ApiError(422, "invalid_csv", "fix these rows and upload again; nothing was imported", errors)
     teams = {r["name"].lower(): r["id"] for r in conn.execute(
@@ -123,6 +123,8 @@ async def import_squads(tournament_id: UUID, request: Request, user=Depends(requ
         ).fetchone()
         new_athletes += res["inserted"]
         updated += not res["inserted"]
+    for team_key, colour in colours.items():
+        conn.execute("update teams set colour = %s where id = %s", (colour, teams[team_key]))
     summary = {"teams_created": new_teams, "athletes_created": new_athletes, "athletes_updated": updated}
     audit(conn, user["id"], "tournament.import_squads", "tournament", t["id"], **summary)
     return summary

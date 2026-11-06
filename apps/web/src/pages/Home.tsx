@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import MatchCard, { type MatchCardData } from '../components/MatchCard'
+import Skeleton from '../components/Skeleton'
 import SportSlider, { savedSport } from '../components/SportSlider'
 import { countdown, kickoff, statusLabel } from '../format'
 import { useApi } from '../useApi'
@@ -14,7 +15,7 @@ function featured(matches: MatchCardData[]): MatchCardData | undefined {
 
 export default function Home() {
   const [sport, setSport] = useState(savedSport)
-  const { data, error } = useApi<MatchCardData[]>('/matches')
+  const { data, error } = useApi<MatchCardData[]>('/matches', 60_000)
 
   const matches = (data ?? []).filter((m) => m.sport === sport && m.status !== 'abandoned')
   const top = featured(matches)
@@ -27,6 +28,7 @@ export default function Home() {
     <section>
       <SportSlider value={sport} onChange={setSport} />
       {error && <p className="error">{error}</p>}
+      {!data && !error && <Skeleton hero rows={2} />}
       {data && !top && <p className="card muted">No {sport} events yet. Check back soon.</p>}
       {top && <MatchCard key={top.id} match={top} />}
 

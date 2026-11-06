@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../api'
 import PageHeader from '../components/PageHeader'
 import Shirt from '../components/Shirt'
+import Skeleton from '../components/Skeleton'
+import { quickPick } from '../quickPick'
+import { useToast } from '../toast'
 import { deadline } from '../format'
 import { go, signInThenReturn } from '../router'
 import { ROLES, TEAM_RULES, type Group, type Role } from '../rules'
@@ -15,8 +18,8 @@ type MatchDetail = {
   sport: string
   locked: boolean
   scheduled_start: string
-  home_team: { id: string; name: string }
-  away_team: { id: string; name: string }
+  home_team: { id: string; name: string; colour: string | null }
+  away_team: { id: string; name: string; colour: string | null }
   squads: { home: SquadAthlete[]; away: SquadAthlete[] }
 }
 type Team = { id: string; label: string; picks: { athlete_id: string; role: Role }[] }
@@ -35,7 +38,9 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
   const [sideFilter, setSideFilter] = useState<'all' | 'home' | 'away'>('all')
   const [errors, setErrors] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
+  const [search, setSearch] = useState('')
   const poolRef = useRef<HTMLDivElement>(null)
+  const toast = useToast()
 
   useEffect(() => {
     const team = myTeams?.find((t) => t.id === teamId)
@@ -44,7 +49,7 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
 
   const athletes: Athlete[] = useMemo(() => {
     if (!match) return []
-    const colours = sideColours(match.home_team.name, match.away_team.name)
+    const colours = sideColours(match.home_team, match.away_team)
     return (['home', 'away'] as const).flatMap((side) => {
       const teamName = side === 'home' ? match.home_team.name : match.away_team.name
       return match.squads[side].map((a) => ({ ...a, side, teamName, colour: colours[side], code: teamCode(teamName) }))
@@ -61,7 +66,7 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
     )
   }
   if (error) return <p className="error">{error}</p>
-  if (!match) return <p className="muted">Loading…</p>
+  if (!match) return <Skeleton hero rows={3} />
   if (match.locked) {
     return (
       <section>
@@ -118,6 +123,7 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
     try {
       if (teamId) await api(`/teams/${teamId}`, token, { method: 'PUT', body })
       else await api(`/matches/${matchId}/teams`, token, { method: 'POST', body })
+      toast(teamId ? 'Team updated' : 'Team saved')
       go(`/match/${matchId}/teams`)
     } catch (e) {
       setErrors(e instanceof ApiError && Array.isArray(e.details) ? e.details.map(String) : [errorText(e)])
@@ -126,9 +132,17 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
     }
   }
 
+  function autoFill() {
+    const next = quickPick(athletes, rules, picks)
+    setPicks(next)
+    toast(picks.size ? 'Team completed: tap any player to change' : 'Team picked for you: tap any player to change')
+  }
+
+  const q = search.trim().toLowerCase()
   const pool = athletes.filter((a) => !picks.has(a.id)
     && (!groupFilter || groupOf(a).name === groupFilter)
-    && (sideFilter === 'all' || a.side === sideFilter))
+    && (sideFilter === 'all' || a.side === sideFilter)
+    && (!q || a.name.toLowerCase().includes(q) || a.teamName.toLowerCase().includes(q)))
   const sheetAthlete = athletes.find((a) => a.id === sheet)
   const rolesSet = ROLES.filter((r) => [...picks.values()].includes(r.role)).length
 
@@ -144,9 +158,15 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
         <span className="chip">{teamCode(match.away_team.name)} {sideCount('away')}/{rules.maxPerSide}</span>
       </div>
 
-      <div className="toggle" role="tablist" aria-label="View">
-        <button role="tab" aria-selected={view === 'pitch'} className={view === 'pitch' ? 'on' : ''} onClick={() => setView('pitch')}>Pitch</button>
-        <button role="tab" aria-selected={view === 'list'} className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>List</button>
+      <div className="row between toolbar">
+        <div className="toggle" role="tablist" aria-label="View">
+          <button role="tab" aria-selected={view === 'pitch'} className={view === 'pitch' ? 'on' : ''} onClick={() => setView('pitch')}>Pitch</button>
+          <button role="tab" aria-selected={view === 'list'} className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>List</button>
+        </div>
+        <div className="row">
+          {picks.size > 0 && <button className="ghost-btn" onClick={() => setPicks(new Map())}>Clear</button>}
+          {(!full || rolesSet < 3) && <button className="ghost-btn accent" onClick={autoFill}>⚡ Quick pick</button>}
+        </div>
       </div>
 
       {view === 'pitch' ? (
@@ -193,6 +213,8 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
 
       <div className="pool" ref={poolRef}>
         <h3>Add players</h3>
+        <input className="search" type="search" placeholder="Search players or teams" value={search}
+          onChange={(e) => setSearch(e.target.value)} aria-label="Search players" />
         <div className="chip-row">
           <button className={`chip ${groupFilter === null ? 'on' : ''}`} onClick={() => setGroupFilter(null)}>All</button>
           {rules.groups.map((g) => (

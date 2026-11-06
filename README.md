@@ -85,7 +85,10 @@ defender has been on the pitch for 60% of the match and disappear if their side 
 
 CSV formats (UTF-8, header row required; see `supabase/seed/` for examples):
 
-- Squads: `team,athlete,position`. Positions: football GK/DEF/MID/FWD; basketball G/F/C; volleyball S/OH/OPP/MB/L.
+- Squads: `team,athlete,position[,jersey]`. Positions: football GK/DEF/MID/FWD; basketball G/F/C;
+  volleyball S/OH/OPP/MB/L. Team-sheet codes are accepted too (LB, CB, CM, DM, AM, ST, RW, PG, SF,
+  Libero, …). `jersey` is a colour name (white, black, royal blue, …) or `#RRGGBB`; it sets the
+  team's shirt colour in the app and only needs to appear once per team.
 - Fixtures: `home_team,away_team,scheduled_start,venue`. Times without an offset are read as Lagos time.
 
 An import with any bad row is rejected whole, with every problem listed by row number.
@@ -108,8 +111,14 @@ npm install
 npm run dev
 ```
 
-The fan app is the default route: lobby, match pages (contests, your teams, live points,
-challenges), team builder, leaderboards, season tables and challenge invite links.
+The fan app is the default route: a sport slider over every event for that sport, a match card
+(your points / average / highest, deadline, and buttons for Pick Team, Contests, Challenges and
+Live points), a pitch-view team builder with Quick pick and search, leaderboards that refresh
+themselves while a match is live, season tables and challenge invite links. The menu button
+(top left) opens the profile.
+
+Production builds register a service worker (`vite-plugin-pwa`): the app installs to the home
+screen and opens without signal. Only purely public match data is cached by it.
 The scorer app is at `#/scorer`. It keeps working offline: every tap is saved on the phone
 first and sent when the connection returns, and the last-seen matches reopen without signal.
 

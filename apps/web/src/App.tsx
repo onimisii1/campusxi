@@ -1,3 +1,4 @@
+import { ToastProvider } from './components/Toast'
 import TopBar from './components/TopBar'
 import ChallengeInvite from './pages/ChallengeInvite'
 import ContestBoard from './pages/ContestBoard'
@@ -48,7 +49,9 @@ function Shell() {
 export default function App() {
   return (
     <SessionProvider>
-      <Shell />
+      <ToastProvider>
+        <Shell />
+      </ToastProvider>
     </SessionProvider>
   )
 }

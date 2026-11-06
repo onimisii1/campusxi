@@ -13,6 +13,8 @@ dist/
 
 # Raw source material (photos of squads, fixtures, etc.): may hold personal data, never commit
 data/
+# Design reference screenshots (may show other apps): keep local
+ui/
 
 # Env and local
 .env

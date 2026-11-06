@@ -1,13 +1,14 @@
 import { countdown, deadline, points, statusLabel } from '../format'
-import { useApi } from '../useApi'
+import { LIVE_REFRESH_MS, useApi } from '../useApi'
+import UpdatedStamp from './UpdatedStamp'
 
 export type MatchCardData = {
   id: string
   tournament_id: string
   tournament: string
   sport: string
-  home_team: { id: string; name: string }
-  away_team: { id: string; name: string }
+  home_team: { id: string; name: string; colour?: string | null }
+  away_team: { id: string; name: string; colour?: string | null }
   venue: string | null
   scheduled_start: string
   status: string
@@ -27,7 +28,8 @@ type Summary = {
 
 /** The big gradient card: the match, your numbers, the deadline and the main actions. */
 export default function MatchCard({ match }: { match: MatchCardData }) {
-  const { data: s } = useApi<Summary>(`/matches/${match.id}/summary`)
+  const live = match.status === 'live' || match.status === 'final_pending'
+  const { data: s, updatedAt, stale } = useApi<Summary>(`/matches/${match.id}/summary`, live ? LIVE_REFRESH_MS : undefined)
   const base = `#/match/${match.id}`
   const started = s?.average !== null && s?.average !== undefined
 
@@ -55,7 +57,8 @@ export default function MatchCard({ match }: { match: MatchCardData }) {
       <hr />
       <p className="deadline">
         {match.locked
-          ? <>{statusLabel(match.status)}{match.venue ? ` · ${match.venue}` : ''}</>
+          ? <>{statusLabel(match.status)}{match.venue ? ` · ${match.venue}` : ''}
+            {live && <span className="small block"><UpdatedStamp at={updatedAt} stale={stale} /></span>}</>
           : <>Deadline: {deadline(match.scheduled_start)}<span className="small block">{countdown(match.seconds_to_lock)}{match.lineup_out ? ' · Line-up out' : ''}</span></>}
       </p>
       <nav className="pills">

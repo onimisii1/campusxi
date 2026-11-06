@@ -74,13 +74,43 @@ def test_publish_needs_fixtures(client, db):
 
 def test_squad_csv_errors_are_all_or_nothing(world, client, db):
     t = world["tournament"]
-    bad = "team,athlete,position\nEngineering,New Kid,STRIKER\nEngineering,,MID\nPhysics,A,MID\nPhysics,A,MID\n"
+    bad = "team,athlete,position\nEngineering,New Kid,WIZARD\nEngineering,,MID\nPhysics,A,MID\nPhysics,A,MID\n"
     res = client.post(f"/admin/tournaments/{t['id']}/squads", headers=auth(world["admin"]), content=bad)
     body = res.json()["error"]
     assert res.status_code == 422 and body["code"] == "invalid_csv"
     assert [d["row"] for d in body["details"]] == [2, 3, 5]
-    assert "STRIKER" in body["details"][0]["message"]
+    assert "WIZARD" in body["details"][0]["message"]
     assert db.execute("select count(*) from teams where name = 'Physics'").fetchone()["count"] == 0
+
+
+def test_team_sheet_codes_and_jersey_colours(client, db):
+    """Real team sheets use LB/CB/CM/ST and a jersey colour (as on the NUESA squad posters)."""
+    school = make_school(db)
+    admin = _admin(db, school)
+    t = client.post("/admin/tournaments", headers=auth(admin), json={
+        "school_id": str(school), "sport": "football", "name": "Dept Cup", "match_minutes": 60}).json()
+    sheet = ("team,athlete,position,jersey\n"
+             "MCE,Keeper One,GK,white\nMCE,Left Back,LB,\nMCE,Centre Back,cb,\nMCE,Holding,DM,\n"
+             "MCE,Playmaker,AM,\nMCE,Striker,ST,\n"
+             "CPE,Their Keeper,Goalkeeper,Royal Blue\nCPE,Winger,RW,\n")
+    res = client.post(f"/admin/tournaments/{t['id']}/squads", headers=auth(admin), content=sheet)
+    assert res.status_code == 200, res.json()
+    positions = {r["display_name"]: r["position"] for r in db.execute("select display_name, position from athletes")}
+    assert positions == {"Keeper One": "GK", "Left Back": "DEF", "Centre Back": "DEF", "Holding": "MID",
+                         "Playmaker": "MID", "Striker": "FWD", "Their Keeper": "GK", "Winger": "FWD"}
+    client.post(f"/admin/tournaments/{t['id']}/fixtures", headers=auth(admin),
+                content=fixtures_csv([("MCE", "CPE", "2026-11-12T16:00:00", "")]))
+    client.post(f"/admin/tournaments/{t['id']}/publish", headers=auth(admin))
+    m = client.get("/matches").json()[0]
+    assert (m["home_team"]["colour"], m["away_team"]["colour"]) == ("#FAFAFA", "#1565C0")
+
+    bad = "team,athlete,position,jersey\nMCE,A,GK,tartan\nMCE,B,CB,black\nEEE,C,CM,yellow\n"
+    errs = client.post(f"/admin/tournaments/{t['id']}/squads", headers=auth(admin), content=bad).json()["error"]
+    assert [d["row"] for d in errs["details"]] == [2]
+    assert "tartan" in errs["details"][0]["message"]
+    clash = "team,athlete,position,jersey\nEEE,A,GK,yellow\nEEE,B,CB,red\n"
+    errs = client.post(f"/admin/tournaments/{t['id']}/squads", headers=auth(admin), content=clash).json()["error"]
+    assert "two different jersey colours" in errs["details"][0]["message"]
 
 
 def test_squad_reimport_updates_positions(world, client, db):

@@ -1,5 +1,6 @@
 import MatchCard, { type MatchCardData } from '../components/MatchCard'
 import PageHeader from '../components/PageHeader'
+import Skeleton from '../components/Skeleton'
 import { useApi } from '../useApi'
 
 type SquadAthlete = { id: string; name: string; position: string; lineup: 'starting' | 'bench' | null }
@@ -8,7 +9,7 @@ type Detail = MatchCardData & { squads: { home: SquadAthlete[]; away: SquadAthle
 export default function MatchHub({ matchId }: { matchId: string }) {
   const { data: m, error } = useApi<Detail>(`/matches/${matchId}`)
   if (error) return <p className="error">{error}</p>
-  if (!m) return <p className="muted">Loading…</p>
+  if (!m) return <Skeleton hero rows={3} />
   const lineupOut = m.squads.home.some((a) => a.lineup) || m.squads.away.some((a) => a.lineup)
 
   return (

@@ -8,11 +8,20 @@ export function teamColour(name: string): string {
   return PALETTE[h % PALETTE.length]
 }
 
-/** Two sides should never share a colour, so the away side shifts along the palette if needed. */
-export function sideColours(home: string, away: string): { home: string; away: string } {
-  const h = teamColour(home)
-  let a = teamColour(away)
-  if (a === h) a = PALETTE[(PALETTE.indexOf(h) + 3) % PALETTE.length]
+type Side = { name: string; colour?: string | null }
+
+/**
+ * Shirt colours for a match: each team's real jersey when the admin imported one, otherwise a
+ * generated colour. Two sides never share a colour, so the away side shifts if they clash.
+ */
+export function sideColours(home: Side, away: Side): { home: string; away: string } {
+  const h = (home.colour || teamColour(home.name)).toUpperCase()
+  let a = (away.colour || teamColour(away.name)).toUpperCase()
+  if (a === h) {
+    const i = PALETTE.indexOf(h)
+    a = PALETTE[(i < 0 ? 0 : i + 3) % PALETTE.length]
+    if (a === h) a = PALETTE[1]
+  }
   return { home: h, away: a }
 }
 

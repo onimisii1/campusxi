@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
+import Skeleton from '../components/Skeleton'
+import UpdatedStamp from '../components/UpdatedStamp'
 import { points } from '../format'
-import { useApi } from '../useApi'
+import { LIVE_REFRESH_MS, useApi } from '../useApi'
 
 type Board = {
   match_id: string
@@ -13,14 +16,20 @@ type Board = {
 const SOURCE = { live: 'Live: ranks change as the match goes on', final: 'Final standings', not_started: 'Ranks start at kick-off' }
 
 export default function ContestBoard({ contestId }: { contestId: string }) {
-  const { data, error, reload } = useApi<Board>(`/contests/${contestId}/leaderboard`)
+  // Poll only while the contest is live; a final or not-yet-started board doesn't change.
+  const [poll, setPoll] = useState(true)
+  const { data, error, reload, updatedAt, stale } =
+    useApi<Board>(`/contests/${contestId}/leaderboard`, poll ? LIVE_REFRESH_MS : undefined)
+  useEffect(() => {
+    if (data) setPoll(data.source === 'live')
+  }, [data])
   if (error) return <p className="error">{error}</p>
-  if (!data) return <p className="muted">Loading…</p>
+  if (!data) return <Skeleton rows={6} />
   return (
     <section>
       <PageHeader title={data.name} back={`#/match/${data.match_id}/contests`} subtitle="Leaderboard" />
       <div className="row between">
-        <span className="muted">{SOURCE[data.source]}</span>
+        <span className="muted small">{SOURCE[data.source]}{data.source === 'live' && <UpdatedStamp at={updatedAt} stale={stale} />}</span>
         {data.source === 'live' && <button className="link" onClick={reload}>Refresh</button>}
       </div>
       <Table rows={data.entries.map((e) => ({ key: e.entry_id, rank: e.rank, name: `${e.team_name} · ${e.label}`,

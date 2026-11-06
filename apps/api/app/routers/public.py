@@ -45,7 +45,7 @@ def get_tournament(tournament_id: UUID, conn=Depends(get_conn)):
                      (tournament_id,)).fetchone()
     if t is None:
         raise ApiError(404, "tournament_not_found", "tournament not found")
-    t["teams"] = conn.execute("select id, name from teams where tournament_id = %s order by name",
+    t["teams"] = conn.execute("select id, name, colour from teams where tournament_id = %s order by name",
                               (tournament_id,)).fetchall()
     return t
 
@@ -85,8 +85,8 @@ def _card(m, now):
     seconds = int((m["scheduled_start"] - now).total_seconds())
     return {
         "id": m["id"], "tournament_id": m["tournament_id"], "tournament": m["tournament"], "sport": m["sport"],
-        "home_team": {"id": m["home_team_id"], "name": m["home_team"]},
-        "away_team": {"id": m["away_team_id"], "name": m["away_team"]},
+        "home_team": {"id": m["home_team_id"], "name": m["home_team"], "colour": m["home_colour"]},
+        "away_team": {"id": m["away_team_id"], "name": m["away_team"], "colour": m["away_colour"]},
         "venue": m["venue"], "scheduled_start": m["scheduled_start"], "status": m["status"],
         "lineup_out": m["status"] == "lineup_out", "locked": is_locked(m, now),
         "seconds_to_lock": max(0, seconds),

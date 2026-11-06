@@ -7,15 +7,18 @@ import { kickoff, points, statusLabel } from '../format'
 import { signInThenReturn } from '../router'
 import { TEAM_RULES } from '../rules'
 import { useSession } from '../session'
+import Skeleton from '../components/Skeleton'
+import UpdatedStamp from '../components/UpdatedStamp'
 import { shortName, sideColours, teamCode } from '../teamStyle'
-import { errorText, useApi } from '../useApi'
+import { useToast } from '../toast'
+import { errorText, LIVE_REFRESH_MS, useApi } from '../useApi'
 
 type Match = {
   id: string
   sport: string
   tournament: string
-  home_team: { id: string; name: string }
-  away_team: { id: string; name: string }
+  home_team: { id: string; name: string; colour: string | null }
+  away_team: { id: string; name: string; colour: string | null }
   scheduled_start: string
   venue: string | null
   status: string
@@ -55,7 +58,7 @@ export default function MatchSection({ matchId, section }: { matchId: string; se
   const { data: match, error } = useApi<Match>(`/matches/${matchId}`)
 
   if (error) return <p className="error">{error}</p>
-  if (!match) return <p className="muted">Loading…</p>
+  if (!match) return <Skeleton rows={4} />
 
   return (
     <section>
@@ -92,11 +95,13 @@ function ContestsTab({ match }: { match: Match }) {
   const { data: teams } = useApi<Team[]>(status === 'ready' ? `/me/teams?match_id=${match.id}` : null)
   const [choice, setChoice] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState<Record<string, string>>({})
+  const toast = useToast()
 
-  async function join(contestId: string) {
+  async function join(contestId: string, name: string) {
     try {
       await api(`/contests/${contestId}/entries`, token, { method: 'POST', body: { fantasy_team_id: choice[contestId] } })
       setMsg({ ...msg, [contestId]: '' })
+      toast(`Joined ${name}`)
       reload()
     } catch (e) {
       setMsg({ ...msg, [contestId]: errorText(e) })
@@ -106,14 +111,18 @@ function ContestsTab({ match }: { match: Match }) {
   async function leave(entryId: string) {
     try {
       await api(`/entries/${entryId}`, token, { method: 'DELETE' })
+      toast('Left the contest')
+    } catch (e) {
+      toast(errorText(e), 'bad')
     } finally {
       reload()
     }
   }
 
+  if (!contests) return <Skeleton rows={2} />
   return (
     <div>
-      {contests?.map((c) => (
+      {contests.map((c) => (
         <div key={c.id} className="card">
           <div className="row between">
             <strong>{c.name}</strong>
@@ -136,7 +145,7 @@ function ContestsTab({ match }: { match: Match }) {
               <div className="row">
                 <TeamPicker teams={teams} value={choice[c.id] ?? ''} onChange={(id) => setChoice({ ...choice, [c.id]: id })}
                   exclude={c.my_entries.map((e) => e.fantasy_team_id)} />
-                <button className="primary narrow" disabled={!choice[c.id]} onClick={() => join(c.id)}>Join</button>
+                <button className="primary narrow" disabled={!choice[c.id]} onClick={() => join(c.id, c.name)}>Join</button>
               </div>
             ) : <p><a href={`#/build/${match.id}`}>Build a team</a> to join.</p>
           ) : status === 'signed_out' ? <NeedSignIn what="join" /> : null)}
@@ -169,7 +178,7 @@ const BADGE: Record<string, string> = { captain: 'C', vice_captain: 'V', key: 'K
 function TeamCard({ team, match }: { team: Team; match: Match }) {
   const { data: bd } = useApi<Breakdown>(match.locked ? `/teams/${team.id}/breakdown` : null)
   const picks: Pick[] = bd?.picks ?? team.picks
-  const colours = sideColours(match.home_team.name, match.away_team.name)
+  const colours = sideColours(match.home_team, match.away_team)
   const rules = TEAM_RULES[match.sport]
   return (
     <div className="card">
@@ -203,13 +212,16 @@ function TeamCard({ team, match }: { team: Team; match: Match }) {
 }
 
 function LiveTab({ match }: { match: Match }) {
-  const { data: live, reload } = useApi<Live>(`/matches/${match.id}/live`)
+  const isLive = match.status === 'live' || match.status === 'final_pending'
+  const { data: live, reload, updatedAt, stale } = useApi<Live>(`/matches/${match.id}/live`, isLive ? LIVE_REFRESH_MS : undefined)
   const [open, setOpen] = useState<string | null>(null)
   if (!match.locked) return <p className="muted">Live points appear once the match kicks off.</p>
+  if (!live) return <Skeleton rows={6} />
   return (
     <div>
       <div className="row between">
-        <span className="muted">{live?.source === 'official' ? 'Final, official stats' : 'Live from the sideline scorer'}</span>
+        <span className="muted small">{live.source === 'official' ? 'Final, official stats' : 'Live from the sideline scorer'}
+          {isLive && <UpdatedStamp at={updatedAt} stale={stale} />}</span>
         <button className="link" onClick={reload}>Refresh</button>
       </div>
       {live?.result && <p><strong>Final score {live.result.home_score}–{live.result.away_score}</strong></p>}
@@ -236,6 +248,7 @@ function ChallengesTab({ match }: { match: Match }) {
   const [direct, setDirect] = useState(false)
   const [link, setLink] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  const toast = useToast()
   const myHere = (mine ?? []).filter((b) => b.match.id === match.id)
 
   const refresh = () => { reloadBoard(); reloadMine() }
@@ -246,6 +259,7 @@ function ChallengesTab({ match }: { match: Match }) {
         method: 'POST', body: { match_id: match.id, fantasy_team_id: team, visibility: direct ? 'direct' : 'board' } })
       setLink(`${window.location.origin}${window.location.pathname}${bet.invite_path}`)
       setMsg(null)
+      toast(direct ? 'Challenge created: share the link' : 'Challenge posted on the board')
       refresh()
     } catch (e) {
       setMsg(errorText(e))
@@ -256,6 +270,7 @@ function ChallengesTab({ match }: { match: Match }) {
     try {
       await api(`/bets/${betId}/fills`, token, { method: 'POST', body: { fantasy_team_id: team } })
       setMsg(null)
+      toast('Challenge accepted. Good luck!')
       refresh()
     } catch (e) {
       setMsg(errorText(e))
@@ -265,6 +280,9 @@ function ChallengesTab({ match }: { match: Match }) {
   async function cancel(betId: string) {
     try {
       await api(`/bets/${betId}/cancel`, token, { method: 'POST' })
+      toast('Challenge withdrawn')
+    } catch (e) {
+      toast(errorText(e), 'bad')
     } finally {
       refresh()
     }
