@@ -4,8 +4,10 @@ r"""Add or change the payment keys in apps/api/.env, then check they work.
     PowerShell, from apps/api:  .\.venv\Scripts\python.exe scripts\set_payment_keys.py [--check]
     Bash, from apps/api:        .venv/Scripts/python scripts/set_payment_keys.py [--check]
 
-Keys are typed with hidden input and saved only to apps/api/.env (gitignored); they are never
-printed in full. Press Enter at any question to keep what's already saved.
+Keys are hidden while you type (like a password) unless you choose to show them (or pass --show);
+after each key the script confirms what it got as sk_test_...a1b2. Keys are saved only to
+apps/api/.env (gitignored) and never printed in full. Press Enter at any question to keep what's
+already saved.
 
 Test keys first: Paystack sk_test_..., Flutterwave FLWSECK_TEST-... . Live keys (sk_live_...,
 FLWSECK-...) take real money, so the script asks you to type LIVE to confirm them.
@@ -132,17 +134,31 @@ def check(values: dict) -> bool:
 
 # ---------- questions ----------
 
+SHOW = False   # type keys visibly (only when nobody can see the screen)
+
+
+def secret_input(prompt: str) -> str:
+    return input(prompt) if SHOW else getpass.getpass(prompt)
+
+
 def ask_key(name: str, current: str, label: str) -> str | None:
     pattern, live_prefix = PATTERNS[name]
     while True:
-        value = getpass.getpass(f"{label} [{mask(current)}] (Enter to keep, '-' to clear): ").strip()
+        value = secret_input(f"{label} [{mask(current)}] (Enter to keep, '-' to clear): ").strip()
         if value == "":
+            print("  Kept as it was.")
             return None
         if value == "-":
+            print("  Cleared.")
             return ""
-        if not re.match(pattern, value):
-            print("  That doesn't look like a secret key (check you copied the SECRET key, not the public one).")
+        if value.startswith(("pk_", "FLWPUBK")):
+            print(f"  Got {mask(value)}: that's the PUBLIC key. Copy the SECRET key instead.")
             continue
+        if not re.match(pattern, value):
+            print(f"  Got {mask(value)} ({len(value)} characters), which doesn't look like a secret key. "
+                  "Copy it again from the dashboard (the whole key, no spaces).")
+            continue
+        print(f"  Got {mask(value)} ({len(value)} characters).")
         if live_prefix in value and input("  This is a LIVE key: real money. Type LIVE to use it: ").strip() != "LIVE":
             print("  Not saved.")
             continue
@@ -164,7 +180,12 @@ def main() -> int:
     if "--check" in sys.argv:
         return 0 if check(values) else 1
 
-    print(f"Saving to {ENV} (gitignored; never committed). Input is hidden.\n")
+    global SHOW
+    print(f"Saving to {ENV} (gitignored; never committed).")
+    SHOW = "--show" in sys.argv or input(
+        "Show the keys while you type? Only say yes if nobody can see your screen (y/N): ").strip().lower() in ("y", "yes")
+    print("Paste with Ctrl+V or right-click." + ("" if SHOW else
+          " Nothing appears while you paste or type: that's normal, it's hidden like a password.") + "\n")
     updates = {}
     for name, label in (("PAYSTACK_SECRET_KEY", "Paystack secret key"),
                         ("FLUTTERWAVE_SECRET_KEY", "Flutterwave secret key (fallback)")):
@@ -174,7 +195,7 @@ def main() -> int:
 
     if updates.get("FLUTTERWAVE_SECRET_KEY", values.get("FLUTTERWAVE_SECRET_KEY")):
         current = values.get("FLUTTERWAVE_WEBHOOK_HASH", "")
-        v = getpass.getpass(f"Flutterwave webhook secret hash [{mask(current)}] "
+        v = secret_input(f"Flutterwave webhook secret hash [{mask(current)}] "
                             "(Enter to keep, 'new' to generate one): ").strip()
         if v.lower() == "new" or (not v and not current):
             v = secrets.token_urlsafe(32)
