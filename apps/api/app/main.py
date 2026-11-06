@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import errors
 from app.config import settings
 from app.engines.scoring.rules import CURRENT_VERSION
-from app.routers import admin, bets, contests, me, public, scorer, teams, wallet
+from app.routers import admin, bets, contests, me, payments, public, scorer, teams, wallet
 
 app = FastAPI(title="CampusXI API", version="0.4.0")
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"],
@@ -19,6 +19,7 @@ app.include_router(bets.router)
 app.include_router(scorer.router)
 app.include_router(admin.router)
 app.include_router(wallet.router)
+app.include_router(payments.router)
 
 
 @app.get("/health")

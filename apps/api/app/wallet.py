@@ -81,7 +81,7 @@ def grant_bonus(conn, user_id, amount: int, reason: str, now) -> None:
 
 # ---------- holds ----------
 
-def hold(conn, user_id, amount: int, ref_type: str, ref_id, use_bonus: bool = True) -> dict:
+def hold(conn, user_id, amount: int, ref_type: str, ref_id, use_bonus: bool = True, now=None) -> dict:
     """Hold `amount` for an entry/stake: coins first, up to BONUS_MAX_SHARE of it, then cash.
     Raises 402 insufficient_funds if cash can't cover the rest."""
     lock_user(conn, user_id)
@@ -92,8 +92,9 @@ def hold(conn, user_id, amount: int, ref_type: str, ref_id, use_bonus: bool = Tr
         raise ApiError(402, "insufficient_funds", f"you need ₦{(from_cash - have[CASH]) / 100:,.0f} more in your "
                                                    f"wallet", {"short_kobo": from_cash - have[CASH]})
     h = conn.execute(
-        """insert into wallet_holds (user_id, ref_type, ref_id, cash_kobo, bonus_kobo) values (%s, %s, %s, %s, %s)
-           returning *""", (user_id, ref_type, ref_id, from_cash, from_bonus)).fetchone()
+        """insert into wallet_holds (user_id, ref_type, ref_id, cash_kobo, bonus_kobo, created_at)
+           values (%s, %s, %s, %s, %s, coalesce(%s, now())) returning *""",
+        (user_id, ref_type, ref_id, from_cash, from_bonus, now)).fetchone()
     post(conn, [(acct(user_id, CASH), -from_cash, "hold"), (acct(user_id, HELD_CASH), from_cash, "hold"),
                 (acct(user_id, BONUS), -from_bonus, "hold"), (acct(user_id, HELD_BONUS), from_bonus, "hold")],
          ref_type, ref_id)
@@ -148,9 +149,9 @@ def refund_pot(conn, pot_account: str, holds: list, now, ref_type: str, ref_id) 
 
 # ---------- money out ----------
 
-def hold_withdrawal(conn, user_id, amount: int, withdrawal_id) -> dict:
+def hold_withdrawal(conn, user_id, amount: int, withdrawal_id, now=None) -> dict:
     """Withdrawals come from cash only (coins can't be withdrawn)."""
-    return hold(conn, user_id, amount, "withdrawal", withdrawal_id, use_bonus=False)
+    return hold(conn, user_id, amount, "withdrawal", withdrawal_id, use_bonus=False, now=now)
 
 
 def complete_withdrawal(conn, h: dict, provider: str, now) -> None:
