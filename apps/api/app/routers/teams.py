@@ -1,4 +1,5 @@
 """Fantasy team builder (PRD 5.3, 8.3): uniform pricing, up to 10 teams per match, edits until lock."""
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -6,12 +7,12 @@ from fastapi import APIRouter, Depends
 from app.auth import current_user
 from app.clock import utcnow
 from app.db import get_conn
-from app.engines.scoring import (
-    MAX_TEAMS_PER_MATCH, Pick, SquadAthlete, team_points, team_signature, validate_team,
-)
+from app.engines.scoring import MAX_TEAMS_PER_MATCH, Pick, SquadAthlete, team_signature, validate_team
+from app.engines.scoring.rules import MULTIPLIERS
 from app.errors import ApiError
+from app.fantasy import snapshot_scores
 from app.live import official_or_primary_scorer, stream_scores
-from app.matches import assert_open, load_match, squad
+from app.matches import assert_open, assert_open_or_late, load_match, squad
 from app.schemas import TeamIn
 
 router = APIRouter(tags=["teams"])
@@ -65,7 +66,10 @@ def _team_out(conn, team_id) -> dict:
 def create_team(match_id: UUID, body: TeamIn, user=Depends(current_user), conn=Depends(get_conn),
                 now=Depends(utcnow)):
     match = load_match(conn, match_id)
-    assert_open(match, now)
+    conn.execute("select id from matches where id = %s for update", (match_id,))  # freeze the watermark
+    # During the late-join window a new team only earns points recorded from now on, and (like any
+    # team after kick-off) it can't be edited, so it can't be re-picked around later goals.
+    late = assert_open_or_late(conn, match, now)
     conn.execute("select id from users where id = %s for update", (user["id"],))  # serialise per user
     labels = {r["label"] for r in conn.execute(
         "select label from fantasy_teams where user_id = %s and match_id = %s", (user["id"], match_id)).fetchall()}
@@ -76,8 +80,9 @@ def create_team(match_id: UUID, body: TeamIn, user=Depends(current_user), conn=D
     _check_duplicate(conn, user["id"], match_id, picks)
     label = next(f"Team {i}" for i in range(1, MAX_TEAMS_PER_MATCH + 1) if f"Team {i}" not in labels)
     team_id = conn.execute(
-        "insert into fantasy_teams (user_id, match_id, label) values (%s, %s, %s) returning id",
-        (user["id"], match_id, label),
+        """insert into fantasy_teams (user_id, match_id, label, late_after_event_id, late_elapsed_minutes)
+           values (%s, %s, %s, %s, %s) returning id""",
+        (user["id"], match_id, label, late["after_event_id"] if late else None, late["minute"] if late else None),
     ).fetchone()["id"]
     _write_picks(conn, team_id, picks)
     return _team_out(conn, team_id)
@@ -108,16 +113,27 @@ def team_breakdown(team_id: UUID, user=Depends(current_user), conn=Depends(get_c
     if team is None:
         raise ApiError(404, "team_not_found", "team not found")
     match = load_match(conn, team["match_id"])
-    scores = stream_scores(conn, match, official_or_primary_scorer(conn, match), now)
+    scorer = official_or_primary_scorer(conn, match)
+    scores = stream_scores(conn, match, scorer, now)
+    before = {}
+    if team["late_after_event_id"] is not None:   # built late: points before then don't count
+        before = snapshot_scores(conn, match, scorer, team["late_after_event_id"], team["late_elapsed_minutes"] or 0)
     out = _team_out(conn, team_id)
-    picks = [Pick(str(p["athlete_id"]), p["role"]) for p in out["picks"]]
-    total, lines = team_points(picks, scores)
-    for p, (_, _, base, pts) in zip(out["picks"], lines):
-        score = scores.get(str(p["athlete_id"]))
-        p.update(base_points=base, points=pts,
-                 breakdown=[{"label": lbl, "points": v} for lbl, v in (score.breakdown if score else [])])
+    total = Decimal("0")
+    for p in out["picks"]:
+        aid = str(p["athlete_id"])
+        now_pts = scores[aid].points if aid in scores else Decimal("0")
+        prior = before[aid].points if aid in before else Decimal("0")
+        base = now_pts - prior
+        pts = base * MULTIPLIERS[p["role"]]
+        total += pts
+        lines = [{"label": lbl, "points": v} for lbl, v in (scores[aid].breakdown if aid in scores else [])]
+        if prior:
+            lines.append({"label": f"Before you joined ({team['late_elapsed_minutes']}′)", "points": -prior})
+        p.update(base_points=base, points=pts, breakdown=lines)
     out["total_points"] = total
     out["match_status"] = match["status"]
+    out["joined_minute"] = team["late_elapsed_minutes"]
     return out
 
 

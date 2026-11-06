@@ -10,9 +10,12 @@ from app.clock import utcnow
 from app.db import get_conn
 from app.engines.payouts import final_ranks
 from app.errors import ApiError
-from app.fantasy import team_totals
+from app.fantasy import totals_since
 from app.live import lineup_entries, official_or_primary_scorer, stream_scores
-from app.matches import MATCH_SQL, is_locked, load_match, squad
+from app.engines.scoring.rules import (
+    CURRENT_VERSION, MAX_TEAMS_PER_MATCH, MULTIPLIERS, SCORING_RULES, TEAM_RULES,
+)
+from app.matches import LATE_FEE_BPS, LATE_JOIN_SHARE, MATCH_SQL, is_locked, late_window, load_match, squad
 
 router = APIRouter(tags=["lobby"])
 
@@ -20,6 +23,37 @@ router = APIRouter(tags=["lobby"])
 @router.get("/sports")
 def list_sports(conn=Depends(get_conn)):
     return conn.execute("select code, name, live from sports order by sort_order").fetchall()
+
+
+@router.get("/sports/{code}/rules")
+def sport_rules(code: str):
+    """Rules tab: team rules and the full points table, straight from the scoring engine."""
+    if code not in CURRENT_VERSION:
+        raise ApiError(404, "sport_not_found", "no rules for that sport yet")
+    rules, team = SCORING_RULES[CURRENT_VERSION[code]], TEAM_RULES[code]
+    labels = {"point": "Each point scored", "sub_on": "Comes on as a substitute"}
+    scoring = [{"event": "In the starting line-up", "points": rules.appearance["start"]},
+               {"event": "Comes on as a substitute", "points": rules.appearance["sub_on"]}]
+    for event, by_pos in rules.position_events.items():
+        for pos, pts in by_pos.items():
+            scoring.append({"event": f"{event.replace('_', ' ').capitalize()} ({pos})", "points": pts})
+    scoring += [{"event": labels.get(e, e.replace("_", " ").capitalize()), "points": p} for e, p in rules.events.items()]
+    if rules.clean_sheet:
+        scoring.append({"event": f"Clean sheet ({'/'.join(sorted(rules.clean_sheet_positions))}, "
+                                 f"{int(rules.clean_sheet_min_share * 100)}% of the match on the pitch)",
+                        "points": rules.clean_sheet})
+    if rules.goal_conceded:
+        scoring.append({"event": f"Goal conceded while on the pitch ({'/'.join(sorted(rules.goal_conceded_positions))})",
+                        "points": rules.goal_conceded})
+    return {
+        "sport": code, "version": rules.version, "team_size": team.size, "max_per_side": team.max_per_side,
+        "positions": [{"name": g.name, "positions": sorted(g.positions), "min": g.min, "max": g.max} for g in team.groups],
+        "multipliers": {"captain": MULTIPLIERS["captain"], "vice_captain": MULTIPLIERS["vice_captain"],
+                        "key": MULTIPLIERS["key"]},
+        "max_teams_per_match": MAX_TEAMS_PER_MATCH,
+        "late_join": {"until_share": LATE_JOIN_SHARE, "fee_multiplier": LATE_FEE_BPS / 10000},
+        "scoring": scoring,
+    }
 
 
 @router.get("/schools")
@@ -62,9 +96,10 @@ def season_leaderboard(tournament_id: UUID, user=Depends(optional_user), conn=De
                              (tournament_id,)).fetchall()
     for row in confirmed:
         m = load_match(conn, row["id"])
-        scores = stream_scores(conn, m, official_or_primary_scorer(conn, m))
-        teams = conn.execute("select id, user_id from fantasy_teams where match_id = %s", (m["id"],)).fetchall()
-        team_pts = team_totals(conn, scores, [r["id"] for r in teams])
+        scorer = official_or_primary_scorer(conn, m)
+        scores = stream_scores(conn, m, scorer)
+        teams = conn.execute(TEAMS_SQL, (m["id"],)).fetchall()
+        team_pts = _team_points(conn, m, scorer, scores, teams)
         best = {}
         for r in teams:
             best[r["user_id"]] = max(best.get(r["user_id"], team_pts[r["id"]]), team_pts[r["id"]])
@@ -81,8 +116,18 @@ def season_leaderboard(tournament_id: UUID, user=Depends(optional_user), conn=De
             "matches_confirmed": len(confirmed), "entries": rows}
 
 
-def _card(m, now):
+TEAMS_SQL = "select id, user_id, late_after_event_id, late_elapsed_minutes from fantasy_teams where match_id = %s"
+
+
+def _team_points(conn, m, scorer, scores, teams) -> dict:
+    """{team_id: points}; a team built late only counts points recorded after it was built."""
+    return totals_since(conn, m, scorer, scores,
+                        [(t["id"], t["id"], t["late_after_event_id"], t["late_elapsed_minutes"]) for t in teams])
+
+
+def _card(m, now, conn):
     seconds = int((m["scheduled_start"] - now).total_seconds())
+    late = late_window(conn, m, now)
     return {
         "id": m["id"], "tournament_id": m["tournament_id"], "tournament": m["tournament"], "sport": m["sport"],
         "home_team": {"id": m["home_team_id"], "name": m["home_team"], "colour": m["home_colour"]},
@@ -90,6 +135,7 @@ def _card(m, now):
         "venue": m["venue"], "scheduled_start": m["scheduled_start"], "status": m["status"],
         "lineup_out": m["status"] == "lineup_out", "locked": is_locked(m, now),
         "seconds_to_lock": max(0, seconds),
+        "late_join_until": late["until_minute"] if late else None,
     }
 
 
@@ -104,7 +150,7 @@ def list_matches(sport: str | None = None, status: str | None = None, tournament
            order by m.scheduled_start""",
         {"sport": sport, "status": status, "tid": tournament_id},
     ).fetchall()
-    return [_card(m, now) for m in rows]
+    return [_card(m, now, conn) for m in rows]
 
 
 @router.get("/matches/{match_id}/live")
@@ -131,15 +177,16 @@ def live_points(match_id: UUID, conn=Depends(get_conn), now=Depends(utcnow)):
 def match_summary(match_id: UUID, user=Depends(optional_user), conn=Depends(get_conn), now=Depends(utcnow)):
     """Home-card numbers: your best team's points, the average and the highest (best team per player)."""
     m = load_match(conn, match_id)
-    teams = conn.execute("select id, user_id from fantasy_teams where match_id = %s", (match_id,)).fetchall()
+    teams = conn.execute(TEAMS_SQL, (match_id,)).fetchall()
     me = user["id"] if user else None
     out = {"match_id": match_id, "status": m["status"], "players": len({t["user_id"] for t in teams}),
            "teams": len(teams), "my_teams": sum(1 for t in teams if t["user_id"] == me),
            "my_points": None, "average": None, "highest": None}
     if m["status"] not in ("live", "final_pending", "confirmed") or not teams:
         return out
-    scores = stream_scores(conn, m, official_or_primary_scorer(conn, m), now)
-    totals = team_totals(conn, scores, [t["id"] for t in teams])
+    scorer = official_or_primary_scorer(conn, m)
+    scores = stream_scores(conn, m, scorer, now)
+    totals = _team_points(conn, m, scorer, scores, teams)
     best = {}
     for t in teams:
         best[t["user_id"]] = max(best.get(t["user_id"], totals[t["id"]]), totals[t["id"]])
@@ -154,7 +201,7 @@ def get_match(match_id: UUID, conn=Depends(get_conn), now=Depends(utcnow)):
     m = load_match(conn, match_id)
     lineup = {r["athlete_id"]: r["started"] for r in conn.execute(
         "select athlete_id, started from match_lineups where match_id = %s", (match_id,)).fetchall()}
-    out = _card(m, now)
+    out = _card(m, now, conn)
     out["scheduled_minutes"] = m["scheduled_minutes"]
     out["squads"] = {"home": [], "away": []}
     for a in squad(conn, m):

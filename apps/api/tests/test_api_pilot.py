@@ -80,7 +80,9 @@ def test_leave_until_lock(sw, client):
     entry = client.post(f"/contests/{c['id']}/entries", headers=auth(sw["player"]), json={"fantasy_team_id": team})
     client.clock.now = sw["kickoff"]
     assert client.delete(f"/entries/{entry.json()['id']}", headers=auth(sw["player"])).status_code == 409
-    late = client.post(f"/contests/{c['id']}/entries", headers=auth(sw["player"]), json={"fantasy_team_id": team})
+    client.clock.now = sw["kickoff"] + timedelta(minutes=60)          # past 67% of 90 minutes
+    t2 = _variants(n, 2)[1]
+    late = client.post(f"/matches/{mid}/teams", headers=auth(sw["player"]), json={"picks": t2})
     assert late.json()["error"]["code"] == "match_locked"
 
 

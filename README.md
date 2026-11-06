@@ -50,10 +50,10 @@ Routes so far (Phases 2–4):
 
 | Area | Routes |
 |---|---|
-| Lobby | `GET /sports`, `/schools`, `/tournaments`, `/tournaments/{id}`, `/tournaments/{id}/leaderboard`, `/matches`, `/matches/{id}`, `/matches/{id}/live` |
+| Lobby | `GET /sports`, `/sports/{code}/rules`, `/schools`, `/tournaments`, `/tournaments/{id}`, `/tournaments/{id}/leaderboard`, `/matches`, `/matches/{id}`, `/matches/{id}/live` |
 | Profile | `POST /me` (team name, school, 18+ date of birth), `GET /me` |
 | Team builder | `POST /matches/{id}/teams`, `PUT /teams/{id}`, `GET /me/teams`, `GET /teams/{id}/breakdown` |
-| Contests | `GET /matches/{id}/contests`, `POST /contests/{id}/entries`, `DELETE /entries/{id}`, `GET /contests/{id}/leaderboard`, `POST /admin/matches/{id}/contests` |
+| Contests | `GET /matches/{id}/contests`, `POST /contests/{id}/entries`, `DELETE /entries/{id}`, `GET /contests/{id}/leaderboard`, `GET /contests/{id}/payout-preview`, `POST /admin/matches/{id}/contests` |
 | Challenges | `POST /bets`, `GET /matches/{id}/bets`, `GET /bets/invite/{token}`, `POST /bets/{id}/fills`, `POST /bets/{id}/cancel`, `GET /me/bets` |
 | Scorer | `GET /scorer/matches`, `GET /scorer/matches/{id}`, `POST /scorer/matches/{id}/events`, `POST /scorer/matches/{id}/submit` |
 | Admin setup | `POST /admin/tournaments`, `.../{id}/squads` (CSV), `.../{id}/fixtures` (CSV), `.../{id}/publish`, `POST /admin/matches/{id}/lineup`, `.../scorers`, `POST /admin/users/{id}/roles`, `POST /admin/schools` |
@@ -82,6 +82,16 @@ defender has been on the pitch for 60% of the match and disappear if their side 
 - Confirming a result records final contest ranks and challenge results; abandoning voids them.
 - The season table adds up each player's best team from every confirmed match.
 - Paid entry and stakes are switched off (`PAID_PLAY_ENABLED=false`) until Phase 5.
+
+### Late joining
+
+Contests (and new teams) stay open after kick-off until 67% of the scheduled match minutes,
+judged by the later of the clock and the latest recorded event. A late entry only scores what
+happens after it joins: the API stores the newest stat event id at that moment and counts
+`points now − points as of that event`, so corrections to earlier events can't leak in. A late
+paid entry costs 150% of the entry fee; the extra goes into the prize pool, but the prize table
+is the same as everyone else's. Teams built late can't be edited. Untimed sports (volleyball)
+have no late window.
 
 CSV formats (UTF-8, header row required; see `supabase/seed/` for examples):
 
@@ -117,6 +127,12 @@ Live points), a pitch-view team builder with Quick pick and search, leaderboards
 themselves while a match is live, season tables and challenge invite links. The menu button
 (top left) opens the profile.
 
+Contests are cards with the prize, a filled-spots bar and a Join button that opens a sheet to
+choose a team. A contest's page has Winnings (prize table if it fills, or as it stands now),
+Rules and Entries tabs, with Leaderboard first once the match starts. The team builder has
+position tabs that show how many more of each you need, plus a Line-ups tab listing both squads
+side by side.
+
 Production builds register a service worker (`vite-plugin-pwa`): the app installs to the home
 screen and opens without signal. Only purely public match data is cached by it.
 The scorer app is at `#/scorer`. It keeps working offline: every tap is saved on the phone
@@ -139,6 +155,9 @@ match 20 minutes from now (`KICKOFF_IN_MINUTES` to change) with two scorers assi
 newcomer with no profile. Run the API with those two variables set, start the web app, and paste
 a token into the development sign-in (`#/signin`, or `#/scorer` for scorers). `--reset` wipes the
 local database first.
+
+`--nuesa` also imports a real tournament from `data/nuesa_{football,basketball}_{squads,fixtures}.csv`.
+`data/` is gitignored because those files hold students' names; without them the step is skipped.
 
 ## Build status
 

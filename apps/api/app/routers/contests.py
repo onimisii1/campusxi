@@ -9,11 +9,11 @@ from app.auth import current_user, optional_user, require_admin
 from app.clock import utcnow
 from app.config import settings
 from app.db import get_conn
-from app.engines.payouts import final_ranks
+from app.engines.payouts import final_ranks, payout_table
 from app.errors import ApiError
-from app.fantasy import team_totals
+from app.fantasy import late_watermark, totals_since
 from app.live import official_or_primary_scorer, stream_scores
-from app.matches import assert_open, is_locked, load_match
+from app.matches import assert_open, assert_open_or_late, is_locked, late_fee, late_window, load_match
 
 router = APIRouter(tags=["contests"])
 
@@ -30,6 +30,23 @@ class ContestIn(BaseModel):
 
 class EntryIn(BaseModel):
     fantasy_team_id: UUID
+
+
+ENTRIES_SQL = """
+    select e.id, e.fantasy_team_id, e.user_id, e.final_points, e.final_rank, e.fee_kobo,
+           e.late_after_event_id, e.late_elapsed_minutes,
+           t.label, t.late_after_event_id as team_after, t.late_elapsed_minutes as team_elapsed, u.team_name
+    from contest_entries e join fantasy_teams t on t.id = e.fantasy_team_id
+    join users u on u.id = e.user_id where e.contest_id = %s order by e.joined_at, e.id
+"""
+
+
+def entry_points(conn, match, scorer_id, scores, entries) -> dict:
+    """{entry_id: points}; late entries (or late-built teams) only count points after joining."""
+    return totals_since(conn, match, scorer_id, scores, [
+        (e["id"], e["fantasy_team_id"],
+         *late_watermark((e["late_after_event_id"], e["late_elapsed_minutes"]), (e["team_after"], e["team_elapsed"])))
+        for e in entries])
 
 
 def create_free_contest(conn, match_id, name="Free contest", capacity=None, team_cap=10, prize_text=None):
@@ -76,12 +93,52 @@ def list_contests(match_id: UUID, user=Depends(optional_user), conn=Depends(get_
                 {"entry_id": e["id"], "fantasy_team_id": e["fantasy_team_id"], "label": e["label"],
                  "final_rank": e["final_rank"], "final_points": e["final_points"]})
     locked = is_locked(m, now)
+    late = late_window(conn, m, now)
     return [{
         "id": c["id"], "name": c["name"], "prize_text": c["prize_text"], "entry_fee_kobo": c["entry_fee_kobo"],
         "capacity": c["capacity"], "entries": c["entries"], "spots_left": c["capacity"] - c["entries"],
         "team_cap": c["team_cap"], "status": c["status"], "locked": locked,
+        "late_join": None if late is None or c["status"] != "open" else {
+            "until_minute": late["until_minute"], "minute": late["minute"],
+            "entry_fee_kobo": late_fee(c["entry_fee_kobo"])},
         "my_entries": mine.get(c["id"], []),
     } for c in rows]
+
+
+def _ranges(prizes) -> list:
+    """[prize per rank] -> [{'from', 'to', 'prize_kobo'}] with equal neighbours merged."""
+    out = []
+    for i, p in enumerate(prizes, start=1):
+        if out and out[-1]["prize_kobo"] == p:
+            out[-1]["to"] = i
+        else:
+            out.append({"from": i, "to": i, "prize_kobo": p})
+    return out
+
+
+@router.get("/contests/{contest_id}/payout-preview")
+def payout_preview(contest_id: UUID, conn=Depends(get_conn)):
+    """Winnings tab (PRD 8.4): prize table if the contest fills, and as it stands now."""
+    c = conn.execute(
+        """select c.*, (select count(*) from contest_entries e where e.contest_id = c.id) as entries,
+                  (select coalesce(sum(fee_kobo), 0)::bigint from contest_entries e where e.contest_id = c.id) as fees
+           from contests c where c.id = %s""", (contest_id,)).fetchone()
+    if c is None:
+        raise ApiError(404, "contest_not_found", "contest not found")
+    base = {"contest_id": contest_id, "free": c["entry_fee_kobo"] == 0, "prize_text": c["prize_text"],
+            "entry_fee_kobo": c["entry_fee_kobo"], "rake_bps": c["rake_bps"], "min_entries": c["min_fill"],
+            "max_entries": c["capacity"], "entries": c["entries"], "maximum": None, "current": None}
+    if base["free"]:
+        return base
+
+    def table(n, gross=None):
+        t = payout_table(n, c["entry_fee_kobo"], c["rake_bps"], c["first_share_bps"], gross)
+        return {"entries": n, "pool_kobo": t.pool, "ranks_paid": t.paid, "rows": _ranges(t.prizes)}
+
+    base["maximum"] = table(c["capacity"])
+    if c["entries"] >= 2:
+        base["current"] = table(c["entries"], max(c["fees"], c["entries"] * c["entry_fee_kobo"]))
+    return base
 
 
 @router.post("/contests/{contest_id}/entries", status_code=201)
@@ -91,7 +148,8 @@ def join_contest(contest_id: UUID, body: EntryIn, user=Depends(current_user), co
     if contest is None:
         raise ApiError(404, "contest_not_found", "contest not found")
     m = load_match(conn, contest["match_id"])
-    assert_open(m, now)
+    conn.execute("select id from matches where id = %s for update", (m["id"],))  # freeze the watermark
+    late = assert_open_or_late(conn, m, now)
     if contest["status"] != "open":
         raise ApiError(409, "contest_closed", "this contest is closed")
     if contest["entry_fee_kobo"] and not settings.paid_play_enabled:
@@ -107,10 +165,14 @@ def join_contest(contest_id: UUID, body: EntryIn, user=Depends(current_user), co
         raise ApiError(409, "contest_full", "this contest is full")
     if counts["mine"] >= contest["team_cap"]:
         raise ApiError(409, "team_cap", f"you can enter at most {contest['team_cap']} teams in this contest")
+    fee = late_fee(contest["entry_fee_kobo"]) if late else contest["entry_fee_kobo"]
     entry = conn.execute(
-        """insert into contest_entries (contest_id, fantasy_team_id, user_id) values (%s, %s, %s)
+        """insert into contest_entries (contest_id, fantasy_team_id, user_id, fee_kobo,
+                                        late_after_event_id, late_elapsed_minutes)
+           values (%s, %s, %s, %s, %s, %s)
            on conflict (contest_id, fantasy_team_id) do nothing returning *""",
-        (contest_id, body.fantasy_team_id, user["id"]),
+        (contest_id, body.fantasy_team_id, user["id"], fee,
+         late["after_event_id"] if late else None, late["minute"] if late else None),
     ).fetchone()
     if entry is None:
         raise ApiError(409, "already_entered", "that team is already in this contest")
@@ -135,25 +197,23 @@ def contest_leaderboard(contest_id: UUID, user=Depends(optional_user), conn=Depe
     if contest is None:
         raise ApiError(404, "contest_not_found", "contest not found")
     m = load_match(conn, contest["match_id"])
-    entries = conn.execute(
-        """select e.id, e.fantasy_team_id, e.user_id, e.final_points, e.final_rank, t.label, u.team_name
-           from contest_entries e join fantasy_teams t on t.id = e.fantasy_team_id
-           join users u on u.id = e.user_id where e.contest_id = %s order by e.joined_at, e.id""",
-        (contest_id,)).fetchall()
+    entries = conn.execute(ENTRIES_SQL, (contest_id,)).fetchall()
     if contest["status"] == "settled":
         scored = {e["id"]: e["final_points"] for e in entries}
         ranks = {e["id"]: e["final_rank"] for e in entries}
         source = "final"
     else:
-        scores = {}
+        scores, scorer = {}, None
         if m["status"] in SCORED_STATUSES:
-            scores = stream_scores(conn, m, official_or_primary_scorer(conn, m), now)
-        totals = team_totals(conn, scores, [e["fantasy_team_id"] for e in entries])
-        scored = {e["id"]: totals[e["fantasy_team_id"]] for e in entries}
+            scorer = official_or_primary_scorer(conn, m)
+            scores = stream_scores(conn, m, scorer, now)
+        scored = entry_points(conn, m, scorer, scores, entries)
         ranks = final_ranks(list(scored.items()))
         source = "live" if m["status"] in SCORED_STATUSES else "not_started"
     rows = [{"rank": ranks[e["id"]], "entry_id": e["id"], "team_name": e["team_name"], "label": e["label"],
-             "points": scored[e["id"]], "is_me": bool(user and e["user_id"] == user["id"])} for e in entries]
+             "points": scored[e["id"]], "is_me": bool(user and e["user_id"] == user["id"]),
+             "joined_minute": late_watermark((e["late_after_event_id"], e["late_elapsed_minutes"]),
+                                             (e["team_after"], e["team_elapsed"]))[1]} for e in entries]
     rows.sort(key=lambda r: (r["rank"], r["team_name"].lower(), r["label"]))
     return {"contest_id": contest_id, "match_id": contest["match_id"], "name": contest["name"],
             "status": contest["status"], "source": source,

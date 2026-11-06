@@ -100,9 +100,16 @@ def test_edit_until_lock_then_read_only(world, client, db):
     client.clock.now += timedelta(seconds=1)
     res = client.put(f"/teams/{team['id']}", headers=auth(world["player"]), json={"picks": valid_picks(names)})
     assert res.status_code == 409 and res.json()["error"]["code"] == "match_locked"
+    assert client.get(f"/matches/{world['match']['id']}").json()["locked"]
+
+    # new teams may still be built late, until 67% of the 90 minutes (minute 60)
+    client.clock.now += timedelta(minutes=59)
+    late = client.post(_url(world), headers=auth(world["player"]), json={"picks": _variants(names, 3)[2]})
+    assert late.status_code == 201 and late.json()["late_elapsed_minutes"] == 59
+    client.clock.now += timedelta(minutes=1)
     res = client.post(_url(world), headers=auth(world["player"]), json={"picks": valid_picks(names)})
     assert res.json()["error"]["code"] == "match_locked"
-    assert client.get(f"/matches/{world['match']['id']}").json()["locked"]
+    assert client.get(f"/matches/{world['match']['id']}").json()["late_join_until"] is None
 
 
 def test_cannot_edit_someone_elses_team(world, client, db):

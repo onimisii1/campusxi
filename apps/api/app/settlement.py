@@ -17,12 +17,13 @@ def bet_event(conn, bet_id, from_status, to_status, actor: str, reason: str | No
 def settle_free(conn, match: dict, official_scorer_id, now):
     scores = stream_scores(conn, {**match, "status": "confirmed"}, official_scorer_id)
 
+    from app.routers.contests import ENTRIES_SQL, entry_points
+
     for contest in conn.execute("select id from contests where match_id = %s and entry_fee_kobo = 0 "
                                 "and status in ('open', 'locked')", (match["id"],)).fetchall():
-        entries = conn.execute("select id, fantasy_team_id from contest_entries where contest_id = %s "
-                               "order by joined_at, id", (contest["id"],)).fetchall()
-        totals = team_totals(conn, scores, [e["fantasy_team_id"] for e in entries])
-        scored = [(e["id"], totals[e["fantasy_team_id"]]) for e in entries]
+        entries = conn.execute(ENTRIES_SQL, (contest["id"],)).fetchall()
+        points = entry_points(conn, match, official_scorer_id, scores, entries)  # late joiners: since joining
+        scored = [(e["id"], points[e["id"]]) for e in entries]
         ranks = final_ranks(scored)
         for entry_id, pts in scored:
             conn.execute("update contest_entries set final_points = %s, final_rank = %s where id = %s",

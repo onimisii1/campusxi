@@ -1082,7 +1082,13 @@ span.chip.ok {
 }
 
 .sheet-btn.on {
-  border-color: var(--brand);
+  border: 2px solid var(--brand);
+  background: color-mix(in srgb, var(--brand) 18%, var(--surface));
+}
+
+.team-options .sheet-btn.on::after {
+  content: ' ✓';
+  color: var(--brand);
 }
 
 .sheet-btn.danger {
@@ -1256,4 +1262,278 @@ span.chip.ok {
 
 .stale {
   color: var(--warn);
+}
+
+/* contest cards and contest page */
+.contest-card {
+  margin-bottom: 14px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.contest-main {
+  display: block;
+  padding: 14px 14px 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.contest-name {
+  font-size: 1.05rem;
+}
+
+.contest-prize {
+  margin: 4px 0 10px;
+  font-weight: 600;
+}
+
+.progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tile);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--good);
+  border-radius: 999px;
+}
+
+.fact-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  background: var(--tile);
+  font-size: 0.82rem;
+}
+
+.fact-strip .late {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.join-btn {
+  margin-left: auto;
+  min-width: 92px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #1f9d55;
+  color: #fff;
+  font-weight: 700;
+}
+
+.my-entries {
+  margin: 0;
+  padding: 8px 14px;
+  color: var(--good);
+}
+
+.notice {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(239, 108, 0, 0.1);
+  border-left: 4px solid var(--warn);
+}
+
+.team-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+a.sheet-btn {
+  color: inherit;
+  text-decoration: none;
+}
+
+.minmax {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  text-align: center;
+  margin: 8px 0 14px;
+}
+
+.minmax div {
+  display: flex;
+  flex-direction: column;
+}
+
+.minmax span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.minmax b {
+  font-size: 1.8rem;
+}
+
+.prize-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.prize-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.prize-list li:last-child {
+  border-bottom: 0;
+}
+
+.prize-list .neg {
+  color: var(--bad);
+}
+
+.rule-tiles {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rule-tiles div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 12px 8px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+}
+
+.rule-tiles b {
+  font-size: 1.4rem;
+}
+
+.tile-a {
+  background: rgba(0, 131, 143, 0.14);
+}
+
+.tile-b {
+  background: rgba(239, 108, 0, 0.14);
+}
+
+.tile-c {
+  background: rgba(106, 27, 154, 0.12);
+}
+
+.entry-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.entry-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.entry-list li.me {
+  font-weight: 700;
+}
+
+.avatar.small {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  background: var(--tile);
+  color: var(--ink);
+}
+
+.my-list li {
+  padding: 8px 0;
+}
+
+/* builder: position tabs, guidance banner, side-by-side line-ups */
+.pos-tabs {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  scrollbar-width: none;
+}
+
+.pos-tabs button {
+  flex: 1 0 auto;
+  padding: 10px 6px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  font-size: 0.85rem;
+  background: none;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pos-tabs button span {
+  font-weight: 400;
+}
+
+.pos-tabs button.on {
+  color: var(--ink);
+  border-bottom-color: var(--brand);
+}
+
+.guide {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 0 0 10px 10px;
+  background: #2b2f36;
+  color: #fff;
+  text-align: center;
+  font-size: 0.88rem;
+}
+
+.lineups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.lineups > div + div {
+  border-left: 2px dashed var(--line);
+  padding-left: 10px;
+}
+
+.lineups h4 {
+  margin: 4px 0 6px;
+  gap: 6px;
+}
+
+.lu-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.lu-row .add {
+  width: 32px;
+  height: 32px;
+  font-size: 1.05rem;
+}
+
+.add.on {
+  background: var(--good);
 }

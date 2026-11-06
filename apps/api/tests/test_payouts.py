@@ -72,6 +72,19 @@ def test_invariants(n, entry):
     assert t.paid == len(p)
 
 
+def test_late_entries_grow_the_pool_but_pay_by_the_same_table():
+    """Late joiners pay 150% (agreed 6 Nov 2026); the pool grows, the bands don't change."""
+    on_time = payout_table(10, N1000)
+    with_late = payout_table(10, N1000, gross=8 * N1000 + 2 * 1500 * KOBO)
+    assert with_late.gross == 11_000 * KOBO and with_late.pool == 6_600 * KOBO
+    assert sum(with_late.prizes) == with_late.pool
+    assert (with_late.paid, with_late.profit) == (on_time.paid, on_time.profit)
+    assert all(x == N1000 for x in with_late.prizes[with_late.profit:])     # money back is the base entry
+    assert all(a >= b for a, b in zip(with_late.prizes, on_time.prizes))   # nobody is worse off
+    with pytest.raises(ValueError, match="can't be less"):
+        payout_table(10, N1000, gross=9 * N1000)
+
+
 def test_rejects_out_of_range():
     with pytest.raises(ValueError):
         payout_table(1, N1000)

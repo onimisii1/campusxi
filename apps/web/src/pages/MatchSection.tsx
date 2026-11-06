@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { api } from '../api'
+import ContestCard from '../components/ContestCard'
 import MyBetRow, { type MyBet } from '../components/MyBetRow'
+import type { Contest } from '../contests'
 import PageHeader from '../components/PageHeader'
 import Shirt from '../components/Shirt'
 import { kickoff, points, statusLabel } from '../format'
@@ -24,18 +26,7 @@ type Match = {
   status: string
   locked: boolean
   seconds_to_lock: number
-}
-type Contest = {
-  id: string
-  name: string
-  prize_text: string | null
-  capacity: number
-  entries: number
-  spots_left: number
-  team_cap: number
-  status: string
-  locked: boolean
-  my_entries: { entry_id: string; fantasy_team_id: string; label: string; final_rank: number | null }[]
+  late_join_until: number | null
 }
 type Pick = { athlete_id: string; display_name: string; role: string; position: string; team_id: string; points?: number }
 type Team = { id: string; label: string; picks: Pick[] }
@@ -90,68 +81,19 @@ function TeamPicker({ teams, value, onChange, exclude = [] }: {
 }
 
 function ContestsTab({ match }: { match: Match }) {
-  const { status, token } = useSession()
+  const { status } = useSession()
   const { data: contests, reload } = useApi<Contest[]>(`/matches/${match.id}/contests`)
   const { data: teams } = useApi<Team[]>(status === 'ready' ? `/me/teams?match_id=${match.id}` : null)
-  const [choice, setChoice] = useState<Record<string, string>>({})
-  const [msg, setMsg] = useState<Record<string, string>>({})
-  const toast = useToast()
-
-  async function join(contestId: string, name: string) {
-    try {
-      await api(`/contests/${contestId}/entries`, token, { method: 'POST', body: { fantasy_team_id: choice[contestId] } })
-      setMsg({ ...msg, [contestId]: '' })
-      toast(`Joined ${name}`)
-      reload()
-    } catch (e) {
-      setMsg({ ...msg, [contestId]: errorText(e) })
-    }
-  }
-
-  async function leave(entryId: string) {
-    try {
-      await api(`/entries/${entryId}`, token, { method: 'DELETE' })
-      toast('Left the contest')
-    } catch (e) {
-      toast(errorText(e), 'bad')
-    } finally {
-      reload()
-    }
-  }
-
   if (!contests) return <Skeleton rows={2} />
+  const late = contests.find((c) => c.late_join)?.late_join
   return (
     <div>
+      {late && (
+        <p className="notice">⏱ Late joining is open until minute {late.until_minute}. Points recorded before you
+          join don't count.</p>
+      )}
       {contests.map((c) => (
-        <div key={c.id} className="card">
-          <div className="row between">
-            <strong>{c.name}</strong>
-            <span className="badge good">Free</span>
-          </div>
-          {c.prize_text && <p>🏆 {c.prize_text}</p>}
-          <p className="muted">{c.entries}/{c.capacity} teams · up to {c.team_cap} per player</p>
-          {c.my_entries.length > 0 && (
-            <ul className="plain">
-              {c.my_entries.map((e) => (
-                <li key={e.entry_id} className="row between">
-                  <span>Your {e.label}{e.final_rank ? ` · finished #${e.final_rank}` : ''}</span>
-                  {!c.locked && <button className="link" onClick={() => leave(e.entry_id)}>Leave</button>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {!c.locked && c.status === 'open' && (status === 'ready' ? (
-            teams && teams.length > 0 ? (
-              <div className="row">
-                <TeamPicker teams={teams} value={choice[c.id] ?? ''} onChange={(id) => setChoice({ ...choice, [c.id]: id })}
-                  exclude={c.my_entries.map((e) => e.fantasy_team_id)} />
-                <button className="primary narrow" disabled={!choice[c.id]} onClick={() => join(c.id, c.name)}>Join</button>
-              </div>
-            ) : <p><a href={`#/build/${match.id}`}>Build a team</a> to join.</p>
-          ) : status === 'signed_out' ? <NeedSignIn what="join" /> : null)}
-          {msg[c.id] && <p className="error">{msg[c.id]}</p>}
-          <a href={`#/contest/${c.id}`}>Leaderboard →</a>
-        </div>
+        <ContestCard key={c.id} contest={c} matchId={match.id} teams={teams} onChanged={reload} />
       ))}
     </div>
   )
@@ -165,8 +107,10 @@ function TeamsTab({ match }: { match: Match }) {
     <div>
       {teams?.length === 0 && <p className="muted">You have no teams for this match yet.</p>}
       {teams?.map((t) => <TeamCard key={t.id} team={t} match={match} />)}
-      {!match.locked && (teams?.length ?? 0) < 10 && (
-        <a className="primary as-button" href={`#/build/${match.id}`}>+ New team</a>
+      {(!match.locked || match.late_join_until !== null) && (teams?.length ?? 0) < 10 && (
+        <a className="primary as-button" href={`#/build/${match.id}`}>
+          {match.locked ? `+ New late team (points count from now, until ${match.late_join_until}′)` : '+ New team'}
+        </a>
       )}
     </div>
   )

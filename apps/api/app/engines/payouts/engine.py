@@ -57,33 +57,38 @@ def bands(n: int) -> tuple:
     return paid, profit
 
 
-def prize_pool(n: int, entry: int, fee_bps: int = PLATFORM_FEE_BPS) -> int:
-    return n * entry * (10000 - fee_bps) // 10000
+def prize_pool(n: int, entry: int, fee_bps: int = PLATFORM_FEE_BPS, gross: int | None = None) -> int:
+    return (n * entry if gross is None else gross) * (10000 - fee_bps) // 10000
 
 
 def profit_floor(entry: int) -> int:
     return -(-entry * FLOOR_NUM // FLOOR_DEN)
 
 
-def is_fundable(n: int, entry: int, fee_bps: int = PLATFORM_FEE_BPS) -> bool:
+def is_fundable(n: int, entry: int, fee_bps: int = PLATFORM_FEE_BPS, gross: int | None = None) -> bool:
     if n == 2:
         return True
     paid, profit = bands(n)
-    pool = prize_pool(n, entry, fee_bps)
+    pool = prize_pool(n, entry, fee_bps, gross)
     return pool - (paid - profit) * entry - profit * profit_floor(entry) >= 0
 
 
 def payout_table(n: int, entry: int, fee_bps: int = PLATFORM_FEE_BPS,
-                 first_share_bps: int | None = None) -> PayoutTable:
+                 first_share_bps: int | None = None, gross: int | None = None) -> PayoutTable:
+    """`gross` is the fees actually paid. Late entries pay more (matches.LATE_FEE_BPS), which grows
+    the pool; the table itself stays based on the standard entry, so every rank pays the same
+    whether the player joined on time or late."""
     if not 2 <= n <= MAX_ENTRANTS:
         raise ValueError(f"entries must be between 2 and {MAX_ENTRANTS} (got {n})")
     if entry <= 0:
         raise ValueError("entry fee must be positive for a paid contest")
-    gross = n * entry
-    pool = prize_pool(n, entry, fee_bps)
+    if gross is not None and gross < n * entry:
+        raise ValueError("fees paid can't be less than entries x entry fee")
+    gross = n * entry if gross is None else gross
+    pool = prize_pool(n, entry, fee_bps, gross)
     if n == 2:
         return PayoutTable(n, entry, fee_bps, gross, pool, 1, 1, (pool,))
-    if not is_fundable(n, entry, fee_bps):
+    if not is_fundable(n, entry, fee_bps, gross):
         raise ValueError(f"a {fee_bps / 100:g}% fee cannot fund the payout bands for {n} entries")
 
     paid, profit = bands(n)

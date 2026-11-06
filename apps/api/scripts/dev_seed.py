@@ -4,6 +4,7 @@
     DATABASE_URL=... python scripts/dev_seed.py
     KICKOFF_IN_MINUTES=5 python scripts/dev_seed.py
     python scripts/dev_seed.py --reset      # wipe the local .devdb database first
+    python scripts/dev_seed.py --nuesa      # also import the real tournament CSVs from data/ (gitignored)
 
 Prints DATABASE_URL, SUPABASE_JWT_SECRET and tokens for an admin, two scorers, two fans
 and a newcomer with no profile yet.
@@ -107,12 +108,44 @@ def main():
     ok(client.post(f"/admin/matches/{match['id']}/scorers", headers=admin,
                    json={"user_ids": [str(users["scorer_a"]), str(users["scorer_b"])]}))
 
+    if "--nuesa" in sys.argv:
+        load_nuesa(client, ok, tok)
+
     print(f"DATABASE_URL={url}")
     print(f"SUPABASE_JWT_SECRET={secret}")
     print(f"MATCH_ID={match['id']}  kick-off {kickoff.isoformat()}")
     for name, uid in users.items():
         print(f"TOKEN_{name.upper()}={tok(uid)}")
     print(f"TOKEN_NEWCOMER={tok(uuid.uuid4())}   # signed in, no profile yet")
+
+
+def load_nuesa(client, ok, tok):
+    """Import a real tournament from CSVs in the repo's gitignored data/ folder:
+    nuesa_{football,basketball}_{squads,fixtures}.csv. Those files hold students' names, so they never
+    go into git; without them this step is skipped."""
+    data = REPO / "data"
+    if not (data / "nuesa_football_squads.csv").exists():
+        print("no data/nuesa_*.csv files; skipping the NUESA tournament", file=sys.stderr)
+        return
+    with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as c:
+        row = c.execute("select id from schools where name = 'Nile University of Nigeria'").fetchone()
+        school = row[0] if row else c.execute(
+            "insert into schools (name) values ('Nile University of Nigeria') returning id").fetchone()[0]
+        uid = uuid.uuid4()  # admins manage only their own school, so this one gets its own admin
+        c.execute("insert into users (id, school_id, team_name, roles, dob) values (%s, %s, %s, %s, '2000-01-01')",
+                  (uid, school, f"nile_admin_{uid.hex[:4]}", ["player", "admin"]))
+    admin = {"Authorization": f"Bearer {tok(uid)}"}
+    for sport, minutes in (("football", 30), ("basketball", 32)):
+        if not (data / f"nuesa_{sport}_squads.csv").exists():
+            continue
+        t = ok(client.post("/admin/tournaments", headers=admin, json={
+            "school_id": str(school), "sport": sport, "name": f"NUESA Sports Tournament 2026/27 ({sport.title()})",
+            "match_minutes": minutes}))
+        for kind in ("squads", "fixtures"):
+            ok(client.post(f"/admin/tournaments/{t['id']}/{kind}", headers=admin,
+                           content=(data / f"nuesa_{sport}_{kind}.csv").read_text(encoding="utf-8")))
+        ok(client.post(f"/admin/tournaments/{t['id']}/publish", headers=admin))
+        print(f"NUESA {sport} tournament {t['id']} loaded", file=sys.stderr)
 
 
 if __name__ == "__main__":

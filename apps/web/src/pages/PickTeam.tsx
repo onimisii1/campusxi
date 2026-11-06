@@ -21,11 +21,13 @@ type MatchDetail = {
   home_team: { id: string; name: string; colour: string | null }
   away_team: { id: string; name: string; colour: string | null }
   squads: { home: SquadAthlete[]; away: SquadAthlete[] }
+  late_join_until: number | null
 }
 type Team = { id: string; label: string; picks: { athlete_id: string; role: Role }[] }
 type Athlete = SquadAthlete & { side: 'home' | 'away'; teamName: string; colour: string; code: string }
 
 const BADGE: Record<Role, string> = { none: '', captain: 'C', vice_captain: 'V', key: 'K' }
+const LINEUPS = '__lineups'
 
 export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?: string }) {
   const { status, token } = useSession()
@@ -67,11 +69,13 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
   }
   if (error) return <p className="error">{error}</p>
   if (!match) return <Skeleton hero rows={3} />
-  if (match.locked) {
+  // After kick-off: no edits, but a new team can still be built in the late-join window.
+  const lateBuild = match.locked && !teamId && match.late_join_until !== null
+  if (match.locked && !lateBuild) {
     return (
       <section>
         <PageHeader title="Pick Team" back={back} />
-        <p className="card">This match has locked, so teams can't change.</p>
+        <p className="card">{teamId ? "The match has started, so this team can't change." : 'This match has locked and late joining has closed.'}</p>
       </section>
     )
   }
@@ -82,6 +86,7 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
   const inGroup = (g: Group, list: Athlete[]) => list.filter((a) => g.positions.includes(a.position))
   const groupOf = (a: Athlete) => rules.groups.find((g) => g.positions.includes(a.position))!
   const sideCount = (side: 'home' | 'away') => chosen.filter((a) => a.side === side).length
+  const rolesSet = ROLES.filter((r) => [...picks.values()].includes(r.role)).length
 
   function blockReason(a: Athlete): string | null {
     if (picks.has(a.id)) return null
@@ -138,18 +143,35 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
     toast(picks.size ? 'Team completed: tap any player to change' : 'Team picked for you: tap any player to change')
   }
 
+  // The open position tab: the one tapped, else the first position still short of its minimum.
+  const activeGroup = groupFilter === LINEUPS ? null
+    : rules.groups.find((g) => g.name === groupFilter)
+      ?? rules.groups.find((g) => inGroup(g, chosen).length < g.min) ?? rules.groups[0]
+  const fullSides = (['home', 'away'] as const).filter((s) => sideCount(s) >= rules.maxPerSide)
+  const guide = full
+    ? (rolesSet < 3 ? 'Team complete: tap players on the pitch to choose C, VC and Key.' : 'Ready to save.')
+    : [activeGroup && `Pick ${activeGroup.min}${activeGroup.max ? `–${activeGroup.max}` : '+'} ${activeGroup.name.toLowerCase()}`,
+       ...fullSides.map((s) => `Max ${rules.maxPerSide} players from ${s === 'home' ? match.home_team.name : match.away_team.name}`)]
+      .filter(Boolean).join(' · ') || `Pick ${rules.size} players`
+  const lineupRank = (a: Athlete) => (a.lineup === 'starting' ? 0 : a.lineup === null ? 1 : 2)
+
   const q = search.trim().toLowerCase()
   const pool = athletes.filter((a) => !picks.has(a.id)
-    && (!groupFilter || groupOf(a).name === groupFilter)
+    && (!activeGroup || groupOf(a) === activeGroup)
     && (sideFilter === 'all' || a.side === sideFilter)
     && (!q || a.name.toLowerCase().includes(q) || a.teamName.toLowerCase().includes(q)))
+    .sort((a, b) => lineupRank(a) - lineupRank(b))
   const sheetAthlete = athletes.find((a) => a.id === sheet)
-  const rolesSet = ROLES.filter((r) => [...picks.values()].includes(r.role)).length
 
   return (
     <section className="pick-team">
-      <PageHeader title={teamId ? 'Edit team' : 'Pick Team'} back={back}
-        subtitle={`${match.home_team.name} vs ${match.away_team.name} · Deadline ${deadline(match.scheduled_start)}`} />
+      <PageHeader title={teamId ? 'Edit team' : lateBuild ? 'Late team' : 'Pick Team'} back={back}
+        subtitle={`${match.home_team.name} vs ${match.away_team.name} · ${lateBuild
+          ? `late joining until minute ${match.late_join_until}` : `Deadline ${deadline(match.scheduled_start)}`}`} />
+      {lateBuild && (
+        <p className="notice small">⏱ The match is on. This team only earns points recorded after you save it, and it
+          can't be edited afterwards.</p>
+      )}
 
       <div className="chip-row" aria-live="polite">
         <span className={`chip ${chosen.length === rules.size ? 'ok' : ''}`}>{chosen.length}/{rules.size} players</span>
@@ -212,17 +234,47 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
       )}
 
       <div className="pool" ref={poolRef}>
-        <h3>Add players</h3>
-        <input className="search" type="search" placeholder="Search players or teams" value={search}
-          onChange={(e) => setSearch(e.target.value)} aria-label="Search players" />
-        <div className="chip-row">
-          <button className={`chip ${groupFilter === null ? 'on' : ''}`} onClick={() => setGroupFilter(null)}>All</button>
+        <div className="pos-tabs" role="tablist" aria-label="Positions">
           {rules.groups.map((g) => (
-            <button key={g.name} className={`chip ${groupFilter === g.name ? 'on' : ''}`} onClick={() => setGroupFilter(g.name)}>
-              {g.name} {inGroup(g, chosen).length}/{g.min}{g.max ? `–${g.max}` : '+'}
+            <button key={g.name} role="tab" aria-selected={activeGroup?.name === g.name}
+              className={activeGroup?.name === g.name ? 'on' : ''} onClick={() => setGroupFilter(g.name)}>
+              {g.positions.join('/')} <span>[{inGroup(g, chosen).length}]</span>
             </button>
           ))}
+          <button role="tab" aria-selected={groupFilter === LINEUPS} className={groupFilter === LINEUPS ? 'on' : ''}
+            onClick={() => setGroupFilter(LINEUPS)}>Line-ups</button>
         </div>
+        <p className="guide" aria-live="polite">{guide}</p>
+        {groupFilter === LINEUPS ? (
+          <div className="lineups">
+            {(['home', 'away'] as const).map((side) => (
+              <div key={side}>
+                <h4 className="row"><Shirt colour={athletes.find((a) => a.side === side)?.colour ?? '#999'} size={22} />
+                  {side === 'home' ? match.home_team.name : match.away_team.name}</h4>
+                <ol className="plain">
+                  {athletes.filter((a) => a.side === side)
+                    .sort((a, b) => lineupRank(a) - lineupRank(b) || rules.groups.indexOf(groupOf(a)) - rules.groups.indexOf(groupOf(b)))
+                    .map((a) => {
+                      const on = picks.has(a.id)
+                      const reason = blockReason(a)
+                      return (
+                        <li key={a.id} className={`lu-row ${on ? 'on' : ''}`}>
+                          <span className="grow">{shortName(a.name)}
+                            <small className="muted block">{a.position}{a.lineup === 'bench' ? ' · bench' : a.lineup ? '' : ' · squad'}</small></span>
+                          <button className={on ? 'add on' : 'add'} disabled={!on && !!reason} title={reason ?? undefined}
+                            onClick={() => (on ? remove(a.id) : add(a.id))}
+                            aria-label={`${on ? 'Remove' : 'Add'} ${a.name}, ${a.teamName}, ${a.position}`}>{on ? '✓' : '+'}</button>
+                        </li>
+                      )
+                    })}
+                </ol>
+              </div>
+            ))}
+          </div>
+        ) : (
+        <>
+        <input className="search" type="search" placeholder="Search players or teams" value={search}
+          onChange={(e) => setSearch(e.target.value)} aria-label="Search players" />
         <div className="chip-row">
           {(['all', 'home', 'away'] as const).map((s) => (
             <button key={s} className={`chip ${sideFilter === s ? 'on' : ''}`} onClick={() => setSideFilter(s)}>
@@ -247,6 +299,8 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
           })}
           {pool.length === 0 && <li className="muted">No more players match these filters.</li>}
         </ul>
+        </>
+        )}
       </div>
 
       <div className="save-bar">

@@ -15,6 +15,7 @@ export type MatchCardData = {
   lineup_out: boolean
   locked: boolean
   seconds_to_lock: number
+  late_join_until?: number | null
 }
 
 type Summary = {
@@ -58,12 +59,13 @@ export default function MatchCard({ match }: { match: MatchCardData }) {
       <p className="deadline">
         {match.locked
           ? <>{statusLabel(match.status)}{match.venue ? ` · ${match.venue}` : ''}
+            {match.late_join_until != null && <span className="small block">⏱ Late joining open until {match.late_join_until}′</span>}
             {live && <span className="small block"><UpdatedStamp at={updatedAt} stale={stale} /></span>}</>
           : <>Deadline: {deadline(match.scheduled_start)}<span className="small block">{countdown(match.seconds_to_lock)}{match.lineup_out ? ' · Line-up out' : ''}</span></>}
       </p>
       <nav className="pills">
         <a href={`${base}/teams`}>{match.locked ? 'My teams' : (s?.my_teams ? 'Pick Team' : 'Pick your team')}</a>
-        <a href={`${base}/contests`}>Contests</a>
+        <a href={`${base}/contests`}>{match.late_join_until != null ? 'Contests · join late' : 'Contests'}</a>
         <a href={`${base}/challenges`}>Challenges</a>
         {match.locked && <a href={`${base}/live`}>Live points</a>}
       </nav>
