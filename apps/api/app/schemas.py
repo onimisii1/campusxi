@@ -9,6 +9,7 @@ class ProfileIn(BaseModel):
     school_id: UUID
     team_name: str = Field(min_length=3, max_length=30, pattern=r"^[A-Za-z0-9_ .-]+$")
     dob: date
+    referral_code: str | None = Field(default=None, max_length=12)
 
 
 class SchoolIn(BaseModel):

@@ -26,10 +26,13 @@ def create_profile(body: ProfileIn, identity: Identity = Depends(current_identit
     if conn.execute("select 1 from users where lower(team_name) = lower(%s)", (body.team_name,)).fetchone():
         raise ApiError(409, "team_name_taken", "that team name is taken")
     # created_at comes from the same clock as the age check, so the DB's 18+ constraint agrees.
-    return conn.execute(
-        "insert into users (id, school_id, team_name, dob, created_at) values (%s, %s, %s, %s, %s) returning *",
+    conn.execute(
+        "insert into users (id, school_id, team_name, dob, created_at) values (%s, %s, %s, %s, %s)",
         (identity.user_id, body.school_id, body.team_name.strip(), body.dob, now),
-    ).fetchone()
+    )
+    from app.routers.wallet import apply_referral_code
+    apply_referral_code(conn, identity.user_id, body.referral_code)
+    return conn.execute("select * from users where id = %s", (identity.user_id,)).fetchone()
 
 
 @router.get("/me")
