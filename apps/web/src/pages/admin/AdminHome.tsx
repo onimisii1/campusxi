@@ -16,6 +16,7 @@ export default function AdminHome() {
   return (
     <section>
       <PageHeader title="Admin" back="#/me" subtitle="Run match day: kick-offs, line-ups, scorers, results" />
+      <a className="row-card" href="#/admin/finance"><strong>💰 Finance and withdrawals</strong><span aria-hidden>→</span></a>
       {error && <p className="error">{error}</p>}
       {!data && !error && <Skeleton rows={3} />}
       {data?.length === 0 && <p className="muted">No tournaments yet.</p>}

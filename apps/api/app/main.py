@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import errors, jobs
 from app.config import settings
-from app.db import connect
 from app.engines.scoring.rules import CURRENT_VERSION
 from app.middleware import RateLimit, RequestContext, setup_logging
 from app.routers import admin, bets, contests, me, payments, public, scorer, teams, wallet
@@ -43,7 +42,8 @@ app.include_router(payments.router)
 def health():
     """Liveness plus what an operator needs to know: database, jobs, payments, switches."""
     try:
-        with connect() as conn:
+        import psycopg
+        with psycopg.connect(settings.database_url, connect_timeout=3) as conn:   # answer fast when the DB is down
             conn.execute("select 1")
         db = "ok"
     except Exception as e:  # noqa: BLE001

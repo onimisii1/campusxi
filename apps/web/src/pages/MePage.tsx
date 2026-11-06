@@ -32,7 +32,7 @@ export default function MePage() {
 
   return (
     <section>
-      <PageHeader title="Profile" back="#/" />
+      <PageHeader title="Profile" back="#/" action={<span className="round-btn ghost" aria-hidden />} />
       <div className="profile-card">
         <span className="avatar" aria-hidden>{initials}</span>
         <div>
@@ -42,7 +42,11 @@ export default function MePage() {
         </div>
       </div>
       <ul className="menu-list">
+        <li><a href="#/wallet">Wallet <span aria-hidden>→</span></a></li>
         <li><a href="#/challenges">My challenges <span aria-hidden>→</span></a></li>
+        <li><a href="#/refer">Invite friends, earn coins <span aria-hidden>→</span></a></li>
+        <li><a href="#/verify">Verify ID <span aria-hidden>→</span></a></li>
+        <li><a href="#/limits">Limits and breaks <span aria-hidden>→</span></a></li>
         {me.roles.includes('scorer') && <li><a href="#/scorer">Scorer app <span aria-hidden>→</span></a></li>}
         {me.roles.some((r) => r === 'admin' || r === 'superadmin') && (
           <li><a href="#/admin">Admin: match day <span aria-hidden>→</span></a></li>)}

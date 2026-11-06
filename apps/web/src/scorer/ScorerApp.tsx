@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, OfflineError } from '../api'
 import { recall, remember } from '../cache'
+import PageHeader from '../components/PageHeader'
 import SignIn from '../components/SignIn'
 import { useSession } from '../session'
 import MatchScreen from './MatchScreen'
@@ -51,7 +52,7 @@ export default function ScorerApp() {
 
   return (
     <section>
-      <h2>Your scoring matches</h2>
+      <PageHeader title="Scorer" back="#/me" subtitle="Your scoring matches" />
       {me && !me.roles.includes('scorer') && <p className="error">Your account doesn't have the scorer role yet. Ask your sports admin.</p>}
       {error && <p className="error">{error}</p>}
       {matches.length === 0 && !error && <p className="muted">No matches assigned to you.</p>}

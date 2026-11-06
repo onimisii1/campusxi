@@ -33,7 +33,9 @@ def test_retried_deposit_with_the_same_key_is_not_started_twice(psp, client, db)
 
 
 def test_rate_limit_on_id_checks(client, db, monkeypatch):
+    import app.middleware as mw
     monkeypatch.setattr(settings, "rate_limit_enabled", True)
+    monkeypatch.setattr(mw.time, "monotonic", lambda: 1_000.0)   # no refills however slow the machine is
     u = make_user(db, make_school(db, "Rate"), team_name="rate_fc")
     codes = [client.post("/me/kyc", headers=auth(u), json={"id_type": "nin", "number": "11111110000",
                                                              "full_name": "Rate Test"}).status_code for _ in range(7)]

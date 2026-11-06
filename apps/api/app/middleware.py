@@ -44,6 +44,22 @@ class RequestContext(BaseHTTPMiddleware):
         return response
 
 
+def caller(request) -> str:
+    """Who is calling, for rate limits: the user id inside the bearer token (unverified: this is only
+    a bucket key, auth happens later), so refreshed tokens share one bucket; else the client IP."""
+    import base64
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer ") and auth.count(".") == 2:
+        try:
+            part = auth.split(".")[1]
+            sub = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))).get("sub")
+            if sub:
+                return "u:" + hashlib.sha256(str(sub).encode()).hexdigest()[:16]
+        except (ValueError, json.JSONDecodeError):
+            pass
+    return "ip:" + (request.client.host if request.client else "?")
+
+
 # (path prefix, methods, requests per minute)
 LIMITS = [
     ("/wallet/", {"POST"}, 20),
@@ -69,8 +85,7 @@ class RateLimit(BaseHTTPMiddleware):
         path = request.url.path
         rule = next((r for r in LIMITS if path.startswith(r[0]) and request.method in r[1]), None)
         if rule and not path.startswith("/payments/"):
-            who = request.headers.get("authorization") or (request.client.host if request.client else "?")
-            key = (hashlib.sha256(who.encode()).hexdigest()[:16], rule[0])
+            key = (caller(request), rule[0])
             if not self._take(key, rule[2]):
                 return JSONResponse({"error": {"code": "rate_limited",
                                                "message": "too many requests; wait a moment and try again"}},

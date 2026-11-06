@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
+import PageHeader from '../components/PageHeader'
+import { savedReferral } from '../money'
 import { returnAfterSignIn } from '../router'
 import { useSession } from '../session'
 import { errorText, useApi } from '../useApi'
@@ -12,6 +14,7 @@ export default function ProfilePage() {
   const [schoolId, setSchoolId] = useState('')
   const [teamName, setTeamName] = useState('')
   const [dob, setDob] = useState('')
+  const [referral, setReferral] = useState(savedReferral() ?? '')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -22,7 +25,8 @@ export default function ProfilePage() {
     setBusy(true)
     setError(null)
     try {
-      await api('/me', token, { method: 'POST', body: { school_id: schoolId, team_name: teamName, dob } })
+      await api('/me', token, { method: 'POST', body: {
+        school_id: schoolId, team_name: teamName, dob, referral_code: referral.trim() || null } })
       await reload()
       returnAfterSignIn()
     } catch (err) {
@@ -33,8 +37,9 @@ export default function ProfilePage() {
   }
 
   return (
+    <section>
+    <PageHeader title="Your profile" back="#/" />
     <form className="card" onSubmit={save}>
-      <h2>Set up your profile</h2>
       <label>
         School
         <select value={schoolId} onChange={(e) => setSchoolId(e.target.value)} required>
@@ -51,8 +56,13 @@ export default function ProfilePage() {
         Date of birth <small className="muted">(CampusXI is 18+)</small>
         <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} required />
       </label>
+      <label>
+        Friend's referral code <small className="muted">(optional)</small>
+        <input value={referral} onChange={(e) => setReferral(e.target.value.toUpperCase())} maxLength={12} />
+      </label>
       {error && <p className="error">{error}</p>}
       <button className="primary" disabled={busy}>Create profile</button>
     </form>
+    </section>
   )
 }

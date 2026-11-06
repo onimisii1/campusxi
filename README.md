@@ -121,6 +121,54 @@ CSV formats (UTF-8, header row required; see `supabase/seed/` for examples):
 
 An import with any bad row is rejected whole, with every problem listed by row number.
 
+## Real money (Phase 5)
+
+All money is integer kobo in the append-only, double-entry `wallet_ledger`; `app/wallet.py` is the
+only code that writes it, and every transaction must balance.
+
+- **Accounts:** cash (withdrawable) and referral **coins** (stake-only, never withdrawn, expire after
+  90 days), plus held versions of each. Coins pay at most 50% of an entry or stake; winnings are
+  always paid as cash; refunds go back where they came from (coins as coins).
+- **Who may play:** `PAID_PLAY_ENABLED`, an ID check (NIN or BVN, 18+; only the last 4 digits and a
+  salted hash are stored), not on a self-imposed break, inside daily deposit/stake limits (lowering
+  a limit is immediate, raising it waits 24h). Scorers can't stake on matches they score; linked
+  accounts (same bank account or device) can't bet against each other.
+- **Paid contests:** the ₦400 Mini or ₦1,000 and up, fundable at the 40% fee. The fee is held on
+  join and released on leave; at confirmation the entries are captured into a pot and prizes booked;
+  cash is paid 24 hours later (dispute hold). Contests short of their minimum are refunded at kick-off.
+- **Stakes:** fantasy H2H (winner gets both stakes less 10% commission on the winnings) and Home/Away
+  result bets (`RESULT_BETS_ENABLED`, needs the sports-betting licence) with multi-challenger slices.
+  Draws, walkovers and abandoned matches refund everyone.
+- **Payments:** Paystack first, Flutterwave as the fallback, behind one interface (`app/payments/`).
+  Deposits are credited once, only after a server-side verify agrees on the amount; webhooks are
+  signature-checked and de-duplicated. Withdrawals go only to a bank account in the verified name;
+  the first one and anything over ₦100,000 wait for an admin (`#/admin/finance`).
+- **Referrals:** both players get coins once the invited friend is verified and deposits ₦1,000.
+- **Background jobs** (`JOBS_ENABLED=true` or `python -m app.jobs` from cron): refunds at kick-off,
+  prize payouts after the hold, payment reconciliation, coin expiry. Each is idempotent and
+  advisory-locked, so only one instance runs it.
+- **Safety:** `Idempotency-Key` on every money POST, rate limits on money and ID routes, JSON request
+  logs with request IDs, `/health` with database, jobs, providers and switches.
+
+### Going live checklist
+
+1. Production Supabase project; set `DATABASE_URL`, `SUPABASE_URL` (and the web app's
+   `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
+2. **Payment keys** (environment only, never in git): `PAYSTACK_SECRET_KEY`, `FLUTTERWAVE_SECRET_KEY`,
+   `FLUTTERWAVE_WEBHOOK_HASH`. Point the dashboards' webhooks at
+   `https://<api>/payments/paystack/webhook` and `https://<api>/payments/flutterwave/webhook`.
+   Set `PUBLIC_APP_URL` to the web app's address (checkout returns there).
+3. **KYC provider:** add a class in `app/kyc/` for the chosen provider (Dojah, Prembly, Smile ID, ...),
+   register it in `PROVIDERS`, set `KYC_PROVIDER` and a long random `KYC_PEPPER`. The `stub` provider
+   is for test mode only.
+4. Switches: `PAID_PLAY_ENABLED=true`; `RESULT_BETS_ENABLED=true` only if the licence covers sports
+   betting; `JOBS_ENABLED=true` on exactly one API instance (or run the cron entry instead).
+5. Check `/health` (database ok, providers listed, jobs running) and `#/admin/finance` (ledger balanced).
+
+Local demo without a provider: `scripts/dev_seed.py --money` verifies the demo fans and credits test
+cash straight into the local ledger, then adds paid contests; run the API with
+`PAID_PLAY_ENABLED=true RESULT_BETS_ENABLED=true`.
+
 ## Tests
 
 ```bash
@@ -139,11 +187,18 @@ npm install
 npm run dev
 ```
 
-The fan app is the default route: a sport slider over every event for that sport, a match card
-(your points / average / highest, deadline, and buttons for Pick Team, Contests, Challenges and
-Live points), a pitch-view team builder with Quick pick and search, leaderboards that refresh
-themselves while a match is live, season tables and challenge invite links. The menu button
-(top left) opens the profile.
+**Design.** The whole app follows the CampusXI designers' mock-up: near-black page, charcoal
+rounded cards, a neon-lime accent (dark text on lime), pill chips and round icon buttons. Tokens
+live at the end of `apps/web/src/index.css` ("CampusXI design system"). Home is the greeting row
+(avatar opens the menu, wallet chip, bell), "Choose your *Favourite game*", sport pills, and the
+top event as a lime card stacked over the next match. Every other screen has a centred title
+between a round back button and a round menu button. Fixtures use the day strip and live-score
+cards with a fans row; the match page is a scoreboard panel with the clock's lime progress knob.
+
+The fan app: event cards for every match of the chosen sport, a match page (your points / average
+/ highest, deadline, and buttons for Pick Team, Contests, Challenges and Live points), a
+pitch-view team builder with Quick pick and search, leaderboards that refresh themselves while a
+match is live, season tables and challenge invite links.
 
 Contests are cards with the prize, a filled-spots bar and a Join button that opens a sheet to
 choose a team. A contest's page has Winnings (prize table if it fills, or as it stands now),
@@ -192,5 +247,6 @@ local database first.
 - Phase 3 (scorer API and app, live points, reconciliation, confirmation): done.
 - Phase 4 (fan app and free pilot: contests, leaderboards, free challenges, season table): done.
 - NUESA 2026/27 (Nile University): competition model, admin screen, tournament pages, profiles: done.
-- Next: the pilot itself (needs a Supabase project and a school sports week), then Phase 5
-  (KYC, wallet, paid contests), which is gated on the licence and school approval.
+- Phase 5 (wallet, payments, ID checks, paid contests, stakes, result bets, referrals, jobs): done in
+  test mode; going live needs the steps in "Going live checklist".
+- Design system from the CampusXI designers applied to every screen.

@@ -1921,3 +1921,1509 @@ table.league tr.qualify td {
   text-decoration: line-through;
   opacity: 0.6;
 }
+
+/* =====================================================================
+   CampusXI design system (Nov 2026, from Ellie's designers' mock-up):
+   near-black page, charcoal rounded cards, neon-lime accent with dark text
+   on lime, pill chips, round icon buttons, light-italic + bold headlines.
+   One theme for every page (the design is dark-only).
+   ===================================================================== */
+:root {
+  color-scheme: dark;
+  --lime: #cdf54a;
+  --lime-deep: #b4e02a;
+  --on-lime: #11130e;
+  --brand: var(--lime);
+  --link: var(--lime);
+  --ink: #f2f4ec;
+  --muted: #9ea196;
+  --page: #0b0c0a;
+  --surface: #1a1c18;
+  --tile: #23261f;
+  --raised: #2a2d26;
+  --line: #2f322b;
+  --good: #cdf54a;
+  --bad: #ff6b6b;
+  --warn: #ffc857;
+  --hero-a: #cdf54a;
+  --hero-b: #b4e02a;
+  --hero-c: #9fd11a;
+  --radius: 22px;
+  --shadow: 0 10px 30px rgb(0 0 0 / 45%);
+}
+
+body {
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgb(205 245 74 / 7%), transparent 60%),
+    var(--page);
+  color: var(--ink);
+}
+
+a {
+  color: var(--lime);
+}
+
+h1,
+h2,
+h3 {
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: 1.15rem;
+  margin: 22px 0 10px;
+}
+
+/* ---------- surfaces ---------- */
+.card,
+.glass-card,
+.row-card,
+.contest-card,
+.tile,
+.profile-card,
+details.card,
+.pitch.mini {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+
+.glass-card {
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.center {
+  text-align: center;
+}
+
+.stat-tiles div,
+.minmax > div,
+.entry-list li {
+  background: var(--tile);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+table.board {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+table.board th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+table.board th,
+table.board td {
+  border-bottom-color: var(--line);
+}
+
+table.board tr.me,
+table.league tr.qualify td {
+  background: rgb(205 245 74 / 9%);
+}
+
+.topbar {
+  background: rgb(11 12 10 / 80%);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+
+.round-btn {
+  background: var(--tile);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.round-btn.menu span {
+  background: var(--ink);
+}
+
+.sheet {
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  border-radius: 28px 28px 0 0;
+}
+
+.sheet-backdrop {
+  background: rgb(0 0 0 / 60%);
+}
+
+/* ---------- controls ---------- */
+.primary,
+.primary.as-button {
+  background: var(--lime);
+  color: var(--on-lime);
+  border: 0;
+  border-radius: 999px;
+  font-weight: 700;
+  box-shadow: 0 6px 22px rgb(205 245 74 / 22%);
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--lime-deep);
+}
+
+.primary:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.primary:disabled {
+  background: var(--raised);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.join-btn {
+  background: var(--lime);
+  color: var(--on-lime);
+  border-radius: 999px;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.chip,
+.sheet-btn,
+.side-btn {
+  background: var(--tile);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 999px;
+}
+
+.sheet-btn {
+  border-radius: 16px;
+}
+
+.chip.on,
+.chip-row .chip.on {
+  background: rgb(205 245 74 / 12%);
+  border-color: var(--lime);
+  color: var(--lime);
+}
+
+.sheet-btn.on,
+.side-btn.on {
+  border: 2px solid var(--lime);
+  background: rgb(205 245 74 / 10%);
+}
+
+input,
+select,
+textarea {
+  background: var(--tile);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 14px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--lime);
+  outline-offset: 1px;
+}
+
+.link {
+  color: var(--lime);
+}
+
+.tabs {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.tab {
+  border-radius: 999px;
+  color: var(--muted);
+  border: 0;
+}
+
+.tab.on {
+  background: var(--lime);
+  color: var(--on-lime);
+  border: 0;
+  font-weight: 700;
+}
+
+.toggle button.on {
+  background: var(--lime);
+  color: var(--on-lime);
+}
+
+.badge {
+  background: var(--raised);
+  color: var(--ink);
+}
+
+.badge.good {
+  color: var(--lime);
+}
+
+.notice {
+  background: rgb(205 245 74 / 8%);
+  border: 1px solid rgb(205 245 74 / 25%);
+  border-radius: 16px;
+  color: var(--ink);
+}
+
+.notice.warn {
+  background: rgb(255 107 107 / 10%);
+  border-color: rgb(255 107 107 / 35%);
+}
+
+.menu-list a,
+.menu-list button {
+  color: var(--ink);
+}
+
+.pos-tabs button.on {
+  color: var(--lime);
+  border-bottom-color: var(--lime);
+}
+
+.guide {
+  background: var(--raised);
+  color: var(--ink);
+}
+
+.progress {
+  background: var(--raised);
+}
+
+.progress span {
+  background: var(--lime);
+}
+
+.fact-strip {
+  background: var(--tile);
+  border-top: 1px solid var(--line);
+}
+
+.role-badge {
+  background: var(--lime);
+  color: var(--on-lime);
+}
+
+/* ---------- home headline (mock-up: "Choose your Favorite game") ---------- */
+.greet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 6px 0 14px;
+}
+
+.greet .who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.greet .avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--lime);
+  color: var(--on-lime);
+  font-weight: 800;
+}
+
+.greet small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.headline {
+  margin: 4px 0 16px;
+  font-size: 2rem;
+  line-height: 1.12;
+  font-weight: 300;
+  font-style: italic;
+  letter-spacing: -0.02em;
+}
+
+.headline b {
+  font-weight: 800;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 18px 0 10px;
+}
+
+.section-head h3 {
+  margin: 0;
+}
+
+.section-head a {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+/* sport pills with a ball icon */
+.slider {
+  background: transparent;
+  padding: 0;
+  gap: 8px;
+}
+
+.seg {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 16px 6px 6px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.seg .ball {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--raised);
+  font-size: 1.1rem;
+}
+
+.seg.on {
+  background: rgb(205 245 74 / 10%);
+  border-color: var(--lime);
+  color: var(--ink);
+}
+
+.seg:disabled {
+  color: var(--muted);
+}
+
+/* ---------- featured match card: lime ---------- */
+.hero {
+  background: var(--lime);
+  color: var(--on-lime);
+  border-radius: 28px;
+  border: 0;
+  box-shadow: 0 16px 40px rgb(205 245 74 / 18%);
+}
+
+.hero .hero-title,
+.hero .deadline,
+.hero .stats,
+.hero .hero-tournament {
+  color: var(--on-lime);
+}
+
+.hero hr {
+  border-top-color: rgb(17 19 14 / 20%);
+}
+
+.hero .pills a {
+  background: var(--on-lime);
+  color: var(--lime);
+  border: 0;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.hero .pills a:active {
+  background: #000;
+}
+
+.hero .pill-live,
+.status-pill {
+  background: var(--on-lime);
+  color: var(--lime);
+}
+
+.status-pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-pill.dark {
+  background: var(--raised);
+  color: var(--ink);
+}
+
+.status-pill.live::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #ff4d4d;
+}
+
+.hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-top .hero-tournament {
+  font-weight: 700;
+  font-size: 0.95rem;
+  opacity: 1;
+}
+
+.faceoff {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 6px;
+  text-align: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+.faceoff .side {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.faceoff .mid small {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+.faceoff .mid b {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.team-badge {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+}
+
+.team-badge i {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  font-style: normal;
+  font-weight: 900;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
+.team-badge.small {
+  width: 44px;
+  height: 44px;
+}
+
+.team-badge.small i {
+  width: 34px;
+  height: 34px;
+  font-size: 0.65rem;
+}
+
+/* other matches: dark cards in the same layout */
+.event-card {
+  display: block;
+  padding: 14px 16px 16px;
+  margin-bottom: 12px;
+  border-radius: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.event-card .faceoff {
+  margin: 10px 0 0;
+}
+
+.event-card .faceoff .mid b {
+  font-size: 1.5rem;
+}
+
+/* ---------- other heroes: lime with dark text ---------- */
+.player-hero,
+.glass-hero,
+.balance-card.glass-hero {
+  background: var(--lime);
+  color: var(--on-lime);
+  border: 0;
+  box-shadow: 0 14px 36px rgb(205 245 74 / 16%);
+  border-radius: 26px;
+}
+
+.player-hero .muted,
+.glass-hero .small {
+  color: rgb(17 19 14 / 70%);
+}
+
+.glass-hero .primary {
+  background: var(--on-lime);
+  color: var(--lime);
+  box-shadow: none;
+}
+
+.balance-chip {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.txn-list li {
+  border-bottom-color: var(--line);
+}
+
+.amount-in {
+  color: var(--lime);
+}
+
+.team-chip {
+  box-shadow: none;
+}
+
+.fx-mid b.live {
+  color: var(--lime);
+}
+
+.share-btn {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.form i.f-W {
+  background: var(--lime);
+}
+
+
+/* toasts */
+.toast {
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.toast.good {
+  border-color: var(--lime);
+}
+
+.coin::before,
+.coin-dot {
+  content: '';
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 3px;
+  border-radius: 50%;
+  vertical-align: -0.05em;
+  background: radial-gradient(circle at 35% 30%, #fff6c2, #f5c518 45%, #b8860b);
+  box-shadow: inset 0 0 0 1px rgb(120 80 0 / 40%);
+}
+
+/* design polish */
+.balance-chip {
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.balance-chip small {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+}
+
+.faceoff .mid b {
+  font-size: 1.55rem;
+  white-space: nowrap;
+}
+
+.hero .pills {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.hero .pills a {
+  padding: 11px 8px;
+  font-size: 0.92rem;
+}
+
+.hero .pills a:first-child {
+  grid-column: 1 / -1;
+}
+
+.hero .stats b {
+  font-size: 1.5rem;
+}
+
+.hero .stats .main b {
+  font-size: 2.4rem;
+}
+
+.hero .deadline {
+  margin: 10px 0 12px;
+  font-size: 0.95rem;
+}
+
+.event-card > .row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- design screens: header, home stack, score cards, scoreboard panel ---------- */
+.page-header {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 18px;
+}
+
+.page-title {
+  min-width: 0;
+  text-align: center;
+}
+
+.page-title h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-title p {
+  margin: 2px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.round-btn {
+  width: 44px;
+  height: 44px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.round-btn.small {
+  width: 32px;
+  height: 32px;
+  font-size: 1.1rem;
+}
+
+.shell {
+  padding-top: 18px;
+}
+
+.greet {
+  min-height: 48px;
+}
+
+.greet-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.greet strong {
+  font-size: 1rem;
+}
+
+.pill-btn {
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--lime);
+  color: var(--on-lime);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+/* home: lime top event stacked over a dark card (design screen 1) */
+.event-stack {
+  position: relative;
+  margin-bottom: 18px;
+}
+
+.event-card {
+  position: relative;
+  display: block;
+  padding: 16px 18px 18px;
+  border-radius: 26px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.event-card.lime {
+  z-index: 1;
+  background: var(--lime);
+  border-color: var(--lime);
+  color: var(--on-lime);
+}
+
+.event-card.stacked {
+  z-index: 0;
+  margin-top: -30px;
+  padding-top: 44px;
+}
+
+.event-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.event-league {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+}
+
+.status-pill {
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.event-card.lime .status-pill {
+  background: var(--on-lime);
+  color: #fff;
+  border-color: var(--on-lime);
+}
+
+.faceoff {
+  margin: 16px 0 0;
+}
+
+.faceoff .side {
+  text-transform: uppercase;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+}
+
+.faceoff .mid small {
+  font-size: 0.72rem;
+}
+
+.faceoff .mid b {
+  display: block;
+  font-size: 1.9rem;
+  margin: 2px 0;
+}
+
+.faceoff .mid .phase {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.event-card:not(.lime) .faceoff .mid small {
+  color: var(--muted);
+}
+
+/* fixtures / list cards (design screen 2) */
+.score-card {
+  display: block;
+  padding: 16px 16px 12px;
+  margin-bottom: 12px;
+  border-radius: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.score-grid {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.score-side {
+  display: grid;
+  min-width: 0;
+}
+
+.score-side.right {
+  text-align: right;
+}
+
+.score-side small {
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-side b {
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.score-mid {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: var(--raised);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.score-mid small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.live-dot {
+  width: 18px;
+  height: 12px;
+  border-radius: 4px;
+  background: #ff3b3b;
+  position: relative;
+}
+
+.live-dot::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  border-left: 5px solid #fff;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+}
+
+.fans-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.avatars {
+  display: flex;
+}
+
+.avatars i {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: -8px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  background: var(--raised);
+  font-style: normal;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.avatars i:first-child {
+  margin-left: 0;
+}
+
+.avatars i.count {
+  background: var(--lime);
+  color: var(--on-lime);
+  font-size: 0.66rem;
+}
+
+/* match page scoreboard (design screen 3 live panel) */
+.panel {
+  padding: 16px;
+  border-radius: 28px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.panel-league {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.league-logo {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--raised);
+  font-size: 1.2rem;
+}
+
+.panel-teams {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  margin: 18px 0 10px;
+  text-align: center;
+}
+
+.panel-team {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+
+.score-bubble {
+  position: absolute;
+  top: 40px;
+  left: calc(50% + 16px);
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--page);
+  font-size: 0.85rem;
+  box-sizing: border-box;
+}
+
+.panel-teams .vs {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.clock {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 6px;
+}
+
+.clock-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.track {
+  position: relative;
+  height: 6px;
+  margin: 10px 4px 6px;
+  border-radius: 999px;
+  background: var(--raised);
+}
+
+.track span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--ink);
+}
+
+.track i {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: var(--lime);
+  box-shadow: 0 0 0 4px rgb(205 245 74 / 22%);
+  transform: translateY(-50%);
+}
+
+.panel-note {
+  margin: 6px 0 12px;
+}
+
+.odds {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.odds div {
+  display: grid;
+  justify-items: center;
+  padding: 10px 6px;
+  border-radius: 999px;
+  background: var(--raised);
+}
+
+.odds small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.odds b {
+  font-size: 1.05rem;
+}
+
+.odds .on {
+  background: var(--lime);
+  color: var(--on-lime);
+}
+
+.odds .on small {
+  color: rgb(17 19 14 / 70%);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.actions .primary {
+  grid-column: 1 / -1;
+}
+
+.action-pill {
+  display: block;
+  padding: 11px 6px;
+  border-radius: 999px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.as-button {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  padding: 14px 18px;
+  box-sizing: border-box;
+}
+
+.balance-chip {
+  border-radius: 999px;
+  min-height: 40px;
+  box-sizing: border-box;
+}
+
+.score-side b.empty {
+  color: var(--muted);
+  font-size: 1.4rem;
+}
+
+.lineup-cards {
+  display: grid;
+  gap: 12px;
+}
+
+.lineup-card {
+  padding: 14px;
+  border-radius: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.lineup-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.lineup-card li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.lineup-card li.bench {
+  opacity: 0.6;
+}
+
+.pos-tag {
+  min-width: 38px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--lime);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* fixtures (design screen 2): search pill, day strip */
+.search-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.search-pill {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.search-pill input {
+  border: 0;
+  background: transparent;
+  padding: 12px 0;
+  outline: none;
+}
+
+.round-btn.square {
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.day-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.day-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.day {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: 48px;
+  padding: 10px 0;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.day b {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.day small {
+  font-size: 0.68rem;
+}
+
+.day.on {
+  border: 2px solid var(--lime);
+  background: rgb(205 245 74 / 10%);
+  color: var(--lime);
+}
+
+.day.on b {
+  color: var(--lime);
+}
+
+/* tabs as the design's chips: separate pills, selected = lime outline */
+.tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0;
+  margin: 4px 0 16px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  flex: 1 0 auto;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tab.on {
+  background: rgb(205 245 74 / 10%);
+  border: 1px solid var(--lime);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* wallet balance card: the lime hero */
+.balance-card {
+  display: grid;
+  gap: 6px;
+  padding: 20px;
+  margin-bottom: 16px;
+  border-radius: 26px;
+}
+
+.balance {
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.balance.code {
+  letter-spacing: 0.2em;
+}
+
+.big-emoji {
+  font-size: 2.6rem;
+  margin: 0;
+}
+
+.block-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.amount-out {
+  font-weight: 700;
+}
+
+.side-btn {
+  flex: 1;
+  padding: 14px;
+  font-weight: 800;
+}
+
+/* builder: a deep pitch for the dark design, lime touches */
+.pitch {
+  background:
+    linear-gradient(rgb(255 255 255 / 16%), rgb(255 255 255 / 16%)) center 50% / 100% 2px no-repeat,
+    radial-gradient(circle at 50% 50%, transparent 54px, rgb(255 255 255 / 16%) 55px, rgb(255 255 255 / 16%) 57px, transparent 58px),
+    repeating-linear-gradient(180deg, #17402a 0 44px, #143823 44px 88px);
+  border: 1px solid var(--line);
+  border-radius: 26px;
+}
+
+.pitch.basketball {
+  background:
+    radial-gradient(circle at 50% 50%, transparent 54px, rgb(255 255 255 / 22%) 55px, rgb(255 255 255 / 22%) 57px, transparent 58px),
+    repeating-linear-gradient(90deg, #6b4524 0 36px, #623f20 36px 72px);
+}
+
+.pitch.volleyball {
+  background:
+    linear-gradient(rgb(255 255 255 / 40%), rgb(255 255 255 / 40%)) center 50% / 100% 3px no-repeat,
+    linear-gradient(#6e3f1c, #5f3518);
+}
+
+.player .nameplate small {
+  color: #fff;
+}
+
+.player.empty .slot {
+  border-color: rgb(205 245 74 / 70%);
+  color: var(--lime);
+}
+
+.ghost-btn {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.ghost-btn.accent,
+.ghost-btn.accent:hover {
+  border-color: var(--lime);
+  color: var(--lime);
+}
+
+.player.on .nameplate b,
+.player.picked .nameplate b {
+  background: var(--lime);
+}
+
+.avatar {
+  background: var(--lime);
+  color: var(--on-lime);
+  font-weight: 800;
+}
+
+.menu-list {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+.menu-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.side-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border-radius: 999px;
+  padding: 8px 14px 8px 8px;
+}
+
+.side-btn small {
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.side-btn.on {
+  background: var(--lime);
+  color: var(--on-lime);
+  border-color: var(--lime);
+}
+
+.team-chip {
+  border-radius: 999px;
+}
+
+.glass-card .chip-row {
+  margin: 12px 0;
+}
+
+.stat-tiles.money {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.stat-tiles.money b {
+  font-size: 1.25rem;
+}
+
+.stat-tiles b {
+  overflow-wrap: anywhere;
+}
+
+.check-row {
+  flex-direction: row !important;
+  margin: 0;
+  padding: 8px 6px;
+  border-radius: 10px;
+}
+
+.check-row.on {
+  background: rgb(205 245 74 / 10%);
+}
+
+.check-row input {
+  width: auto;
+  flex: none;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--lime);
+}
+
+/* the mock-up's joined cards: the lime card flows down into the dark card with an S-curved tab.
+   Geometry (tab height h = 2a): the tab's bottom-right corner is convex (radius a); a concave a x a
+   fillet beside the tab's top half joins it back to the card's bottom edge. */
+.event-stack.joined {
+  --tab-w: 44%;
+  --tab-a: 22px;
+}
+
+.event-stack.joined .event-card.lime {
+  border-bottom-left-radius: 0;
+}
+
+.event-stack.joined .event-card.lime::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: calc(100% - 1px);
+  width: var(--tab-w);
+  height: calc(2 * var(--tab-a) + 1px);
+  background: var(--lime);
+  border-radius: 0 0 var(--tab-a) 26px;
+}
+
+.event-stack.joined .event-card.lime::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--tab-w) - 1px);
+  top: calc(100% - 1px);
+  width: var(--tab-a);
+  height: var(--tab-a);
+  background: radial-gradient(circle at 100% 100%, transparent calc(var(--tab-a) - 0.5px), var(--lime) var(--tab-a));
+}
+
+.event-stack.joined .event-card.stacked {
+  margin-top: -30px;
+  padding-top: calc(30px + 2 * var(--tab-a) + 14px);
+}

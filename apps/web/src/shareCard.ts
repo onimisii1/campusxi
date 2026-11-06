@@ -22,9 +22,12 @@ export type CardSpec = {
 
 const W = 1080
 const H = 1350
-const NAVY = '#0b2545'
-const NAVY_2 = '#13315c'
-const GREEN = '#19a68f'
+const INK = '#f2f4ec'
+const PANEL = '#1a1c18'
+const HEAD = '#23261f'
+const MUTED = '#9ea196'
+const LIME = '#cdf54a'
+const ON_LIME = '#11130e'
 
 function luminance(hex: string): number {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
@@ -56,29 +59,29 @@ export function drawCard(canvas: HTMLCanvasElement, spec: CardSpec): void {
 
   // background
   const bg = ctx.createLinearGradient(0, 0, W, H)
-  bg.addColorStop(0, NAVY)
-  bg.addColorStop(1, '#0f4c5c')
+  bg.addColorStop(0, '#11130e')
+  bg.addColorStop(1, '#0b0c0a')
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, W, H)
 
   // header
   ctx.textAlign = 'center'
-  ctx.fillStyle = GREEN
+  ctx.fillStyle = LIME
   ctx.font = font(700, 30)
   ctx.fillText(fit(ctx, spec.kicker.toUpperCase(), W - 120), W / 2, 100)
-  ctx.fillStyle = '#fff'
+  ctx.fillStyle = INK
   ctx.font = font(900, 92)
   ctx.fillText(fit(ctx, spec.title.toUpperCase(), W - 100), W / 2, 205)
-  ctx.fillStyle = GREEN
+  ctx.fillStyle = LIME
   roundRect(ctx, W / 2 - 70, 232, 140, 10, 5)
   ctx.fill()
   if (spec.badge) {
     ctx.font = font(800, 30)
     const bw = ctx.measureText(spec.badge).width + 60
     roundRect(ctx, W / 2 - bw / 2, 270, bw, 56, 28)
-    ctx.fillStyle = GREEN
+    ctx.fillStyle = LIME
     ctx.fill()
-    ctx.fillStyle = '#fff'
+    ctx.fillStyle = ON_LIME
     ctx.fillText(spec.badge, W / 2, 309)
   }
 
@@ -86,73 +89,76 @@ export function drawCard(canvas: HTMLCanvasElement, spec: CardSpec): void {
   const top = 360
   const rowH = Math.min(100, Math.floor((H - top - 230) / Math.max(spec.rows.length, 1)))
   const panelH = 80 + rowH * spec.rows.length
-  roundRect(ctx, 50, top, W - 100, panelH, 28)
-  ctx.fillStyle = '#ffffff'
+  roundRect(ctx, 50, top, W - 100, panelH, 36)
+  ctx.fillStyle = PANEL
   ctx.fill()
+  ctx.strokeStyle = '#2f322b'
+  ctx.lineWidth = 2
+  ctx.stroke()
   ctx.save()
-  roundRect(ctx, 50, top, W - 100, 80, 28)
+  roundRect(ctx, 50, top, W - 100, 80, 36)
   ctx.clip()
-  ctx.fillStyle = NAVY_2
+  ctx.fillStyle = HEAD
   ctx.fillRect(50, top, W - 100, 80)
   ctx.restore()
 
   const colW = 92
   const cellX = (i: number) => W - 90 - (spec.headers.length - 1 - i) * colW
   ctx.font = font(800, 26)
-  ctx.fillStyle = '#cfd8e3'
+  ctx.fillStyle = MUTED
   ctx.textAlign = 'left'
   ctx.fillText('#', 80, top + 52)
   ctx.textAlign = 'right'
   spec.headers.forEach((h, i) => ctx.fillText(h, cellX(i), top + 52))
 
   ctx.save()
-  roundRect(ctx, 50, top, W - 100, panelH, 28)   // keep row shading inside the rounded panel
+  roundRect(ctx, 50, top, W - 100, panelH, 36)   // keep row shading inside the rounded panel
   ctx.clip()
   spec.rows.forEach((r, i) => {
     const y = top + 80 + i * rowH
     if (r.highlight) {
-      ctx.fillStyle = '#e6f6f2'
+      ctx.fillStyle = 'rgba(205, 245, 74, 0.12)'
       ctx.fillRect(50, y, W - 100, rowH)
     }
     if (i > 0) {
-      ctx.fillStyle = '#e3e8ef'
+      ctx.fillStyle = '#2f322b'
       ctx.fillRect(70, y, W - 140, 2)
     }
     const mid = y + rowH / 2 + 12
     ctx.textAlign = 'left'
-    ctx.fillStyle = GREEN
+    ctx.fillStyle = LIME
     ctx.font = font(900, 36)
     ctx.fillText(r.rank ?? '', 76, mid)
     let x = 150
     if (r.chip) {
       ctx.font = font(900, 28)
       const cw = 110
-      roundRect(ctx, x, mid - 38, cw, 50, 12)
+      roundRect(ctx, x, mid - 38, cw, 50, 25)
       ctx.fillStyle = r.chip.colour
       ctx.fill()
-      ctx.strokeStyle = '#c3ccd8'
+      ctx.strokeStyle = '#3a3d35'
       ctx.lineWidth = 2
       ctx.stroke()
-      ctx.fillStyle = luminance(r.chip.colour) > 170 ? '#0b2545' : '#fff'
+      ctx.fillStyle = luminance(r.chip.colour) > 170 ? ON_LIME : '#fff'
       ctx.textAlign = 'center'
       ctx.fillText(r.chip.code, x + cw / 2, mid - 3)
       x += cw + 22
     }
     ctx.textAlign = 'left'
-    ctx.fillStyle = NAVY
+    ctx.fillStyle = INK
     ctx.font = font(800, 34)
     const textMax = cellX(0) - colW + 30 - x
     ctx.fillText(fit(ctx, r.text, textMax), x, r.sub ? mid - 10 : mid)
     if (r.sub) {
       ctx.font = font(500, 24)
-      ctx.fillStyle = '#5f6b7a'
+      ctx.fillStyle = MUTED
       ctx.fillText(fit(ctx, r.sub, textMax), x, mid + 22)
     }
     ctx.textAlign = 'right'
     r.cells.forEach((c, j) => {
       const last = j === r.cells.length - 1
       ctx.font = font(last ? 900 : 600, last ? 40 : 32)
-      ctx.fillStyle = NAVY
+      ctx.fillStyle = last ? LIME : INK
       ctx.fillText(c, cellX(j), mid)
     })
   })
@@ -161,13 +167,13 @@ export function drawCard(canvas: HTMLCanvasElement, spec: CardSpec): void {
   // footer
   ctx.textAlign = 'center'
   if (spec.note) {
-    ctx.fillStyle = '#cfd8e3'
+    ctx.fillStyle = MUTED
     ctx.font = font(500, 26)
     ctx.fillText(fit(ctx, spec.note, W - 120), W / 2, top + panelH + 60)
   }
-  ctx.fillStyle = GREEN
+  ctx.fillStyle = LIME
   ctx.fillRect(0, H - 90, W, 90)
-  ctx.fillStyle = '#fff'
+  ctx.fillStyle = ON_LIME
   ctx.font = font(900, 36)
   ctx.fillText('CampusXI · play the games you watch', W / 2, H - 32)
 }

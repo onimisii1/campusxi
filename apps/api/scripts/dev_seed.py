@@ -5,6 +5,7 @@
     KICKOFF_IN_MINUTES=5 python scripts/dev_seed.py
     python scripts/dev_seed.py --reset      # wipe the local .devdb database first
     python scripts/dev_seed.py --nuesa      # also import the real tournament CSVs from data/ (gitignored)
+    python scripts/dev_seed.py --money      # paid-play demo: verified fans with test cash, paid contests
 
 Prints DATABASE_URL, SUPABASE_JWT_SECRET and tokens for an admin, two scorers, two fans
 and a newcomer with no profile yet.
@@ -110,6 +111,8 @@ def main():
 
     if "--nuesa" in sys.argv:
         load_nuesa(client, ok, tok)
+    if "--money" in sys.argv:
+        seed_money(url, users, match["id"])
 
     print(f"DATABASE_URL={url}")
     print(f"SUPABASE_JWT_SECRET={secret}")
@@ -117,6 +120,31 @@ def main():
     for name, uid in users.items():
         print(f"TOKEN_{name.upper()}={tok(uid)}")
     print(f"TOKEN_NEWCOMER={tok(uuid.uuid4())}   # signed in, no profile yet")
+
+
+def seed_money(url, users, match_id):
+    """Local demo of paid play WITHOUT a payment provider: the fans are ID-verified and given test
+    cash straight in the local ledger (as if a deposit had cleared), fan_a also gets referral coins,
+    and the demo match gets a N1,000 paid contest. Run the API with PAID_PLAY_ENABLED=true (and
+    RESULT_BETS_ENABLED=true for Home/Away bets). Never point this at a real database."""
+    from datetime import datetime, timezone
+
+    from app import wallet
+    from app.routers.contests import create_paid_contest
+    from psycopg.rows import dict_row
+    with psycopg.connect(url, row_factory=dict_row) as c:
+        with c.transaction():
+            for name in ("fan_a", "fan_b", "admin"):
+                c.execute("update users set kyc_status = 'verified' where id = %s", (users[name],))
+                c.execute("""insert into kyc_records (user_id, provider, provider_ref, verified_name, status, id_type,
+                             id_last4) values (%s, 'stub', 'dev-seed', %s, 'verified', 'nin', '0000')""",
+                          (users[name], f"Dev {name.title()}"))
+                wallet.credit_deposit(c, users[name], 2_000_000, "paystack", None)     # N20,000 test cash
+            wallet.grant_bonus(c, users["fan_a"], 50_000, "referral", datetime.now(timezone.utc))
+            create_paid_contest(c, match_id, "₦1,000 Mega", 10, 100_000)
+            create_paid_contest(c, match_id, "₦400 Mini", 5, 40_000)
+    print("money demo: fans verified with N20,000 test cash; fan_a has N500 coins; paid contests added",
+          file=sys.stderr)
 
 
 def load_nuesa(client, ok, tok):

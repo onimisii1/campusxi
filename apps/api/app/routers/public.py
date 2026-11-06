@@ -171,8 +171,24 @@ def _card(m, now, conn):
         "seconds_to_lock": max(0, seconds),
         "late_join_until": late["until_minute"] if late else None,
         "code": m["code"], "stage": m["stage"], "kicked_off_at": m["kicked_off_at"],
-        "score": scoreline(conn, m),
+        "score": scoreline(conn, m), "minute": late["minute"] if late else _minute(conn, m, now),
+        "scheduled_minutes": m["scheduled_minutes"], **_fans(conn, m["id"]),
     }
+
+
+def _minute(conn, m, now):
+    from app.matches import match_minute
+    return match_minute(conn, m, now) if m["status"] in ("live", "final_pending") else None
+
+
+def _fans(conn, match_id) -> dict:
+    """The design's "people" row: how many fans picked a team, and a few of them for the avatar stack."""
+    rows = conn.execute(
+        """select u.team_name, count(*) over () as n from (
+             select distinct on (user_id) user_id, created_at from fantasy_teams where match_id = %s
+             order by user_id, created_at) f
+           join users u on u.id = f.user_id order by f.created_at desc limit 3""", (match_id,)).fetchall()
+    return {"fans": rows[0]["n"] if rows else 0, "fans_preview": [r["team_name"] for r in rows]}
 
 
 @router.get("/matches")

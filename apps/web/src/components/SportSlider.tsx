@@ -3,6 +3,7 @@ import { useApi } from '../useApi'
 type Sport = { code: string; name: string; live: boolean }
 
 const KEY = 'campusxi.sport'
+const BALL: Record<string, string> = { football: '⚽', basketball: '🏀', volleyball: '🏐' }
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function savedSport(): string {
@@ -28,7 +29,7 @@ export default function SportSlider({ value, onChange }: { value: string; onChan
             }
             onChange(s.code)
           }}>
-          {s.name}{!s.live && <small> soon</small>}
+          <span className="ball" aria-hidden>{BALL[s.code] ?? '🏆'}</span>{s.name}{!s.live && <small> soon</small>}
         </button>
       ))}
     </div>

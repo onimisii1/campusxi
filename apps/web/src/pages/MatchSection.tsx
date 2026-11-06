@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import ContestCard from '../components/ContestCard'
 import JoinContestSheet from '../components/JoinContestSheet'
 import MyBetRow, { type MyBet } from '../components/MyBetRow'
 import { openFor, type Contest } from '../contests'
+import { naira, newIdempotencyKey, payLine, split, useWallet } from '../money'
 import PageHeader from '../components/PageHeader'
 import Shirt from '../components/Shirt'
+import TeamBadge from '../components/TeamBadge'
 import { kickoff, points, statusLabel } from '../format'
 import { signInThenReturn } from '../router'
 import { TEAM_RULES } from '../rules'
@@ -36,7 +38,9 @@ type Breakdown = { total_points: number; picks: Pick[] }
 type LiveAthlete = { id: string; name: string; position: string; side: string; points: number;
   breakdown: { label: string; points: number }[] }
 type Live = { source: string | null; result: { home_score: number; away_score: number } | null; athletes: LiveAthlete[] }
-type BoardBet = { id: string; creator: { team_name: string; record: { won: number; lost: number; tied: number } }; is_mine: boolean }
+type BoardBet = { id: string; kind: 'fantasy_h2h' | 'match_result'; stake_kobo: number; unmatched_kobo: number
+  side: 'home' | 'away' | null; your_side: 'home' | 'away' | null; win_up_to_kobo: number; quote_kobo: number
+  creator: { team_name: string; record: { won: number; lost: number; tied: number } }; is_mine: boolean }
 
 // Each section of a match is its own page, reached from the match card's pill buttons.
 export const SECTIONS = {
@@ -165,11 +169,14 @@ function TeamsTab({ match, focus }: { match: Match; focus?: string }) {
   const { data: contests, reload } = useApi<Contest[]>(`/matches/${match.id}/contests`)
   const [sheet, setSheet] = useState<{ team: Team; fresh: boolean } | null>(null)
 
-  // Straight after building a team, offer to enter it in a contest.
+  // Straight after building a team, offer (once) to enter it in a contest.
+  const offered = useRef(false)
   useEffect(() => {
     const team = focus ? teams?.find((t) => t.id === focus) : undefined
-    if (team && contests && openFor(contests, team.id).length > 0) setSheet({ team, fresh: true })
-    if (focus && team) window.history.replaceState(null, '', `#/match/${match.id}/teams`)
+    if (!team || !contests || offered.current) return
+    offered.current = true
+    if (openFor(contests, team.id).length > 0) setSheet({ team, fresh: true })
+    window.history.replaceState(null, '', `#/match/${match.id}/teams`)
   }, [focus, teams, contests, match.id])
 
   if (status === 'signed_out') return <NeedSignIn what="build teams" />
@@ -280,24 +287,36 @@ function LiveTab({ match }: { match: Match }) {
   )
 }
 
+const STAKES = [0, 100_000, 200_000, 500_000]
+
 function ChallengesTab({ match }: { match: Match }) {
   const { status, token } = useSession()
   const { data: board, reload: reloadBoard } = useApi<BoardBet[]>(`/matches/${match.id}/bets`)
   const { data: teams } = useApi<Team[]>(status === 'ready' ? `/me/teams?match_id=${match.id}` : null)
   const { data: mine, reload: reloadMine } = useApi<MyBet[]>(status === 'ready' ? '/me/bets' : null)
+  const { data: w, reload: reloadWallet } = useWallet()
   const [team, setTeam] = useState('')
+  const [stake, setStake] = useState(0)
   const [direct, setDirect] = useState(false)
   const [link, setLink] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  const [side, setSide] = useState<'home' | 'away' | null>(null)
+  const [betStake, setBetStake] = useState(200_000)
+  const [slice, setSlice] = useState<Record<string, string>>({})
   const toast = useToast()
   const myHere = (mine ?? []).filter((b) => b.match.id === match.id)
+  const paid = !!w?.paid_play_enabled && w.kyc_status === 'verified'
+  const resultBets = paid && !!w?.result_bets_enabled
 
-  const refresh = () => { reloadBoard(); reloadMine() }
+  const refresh = () => { reloadBoard(); reloadMine(); reloadWallet() }
+  const afford = (amount: number) => !amount || (w ? split(w, amount).short === 0 : false)
+  const winFor = (amount: number) => 2 * amount - amount / 10
 
   async function create() {
     try {
       const bet = await api<{ invite_path: string }>('/bets', token, {
-        method: 'POST', body: { match_id: match.id, fantasy_team_id: team, visibility: direct ? 'direct' : 'board' } })
+        method: 'POST', idempotencyKey: newIdempotencyKey(),
+        body: { match_id: match.id, fantasy_team_id: team, stake_kobo: stake, visibility: direct ? 'direct' : 'board' } })
       setLink(`${window.location.origin}${window.location.pathname}${bet.invite_path}`)
       setMsg(null)
       toast(direct ? 'Challenge created: share the link' : 'Challenge posted on the board')
@@ -307,11 +326,26 @@ function ChallengesTab({ match }: { match: Match }) {
     }
   }
 
-  async function accept(betId: string) {
+  async function createResultBet() {
     try {
-      await api(`/bets/${betId}/fills`, token, { method: 'POST', body: { fantasy_team_id: team } })
+      await api('/bets', token, { method: 'POST', idempotencyKey: newIdempotencyKey(),
+        body: { kind: 'match_result', match_id: match.id, side, stake_kobo: betStake, visibility: 'board' } })
+      toast(`Bet posted: ${side === 'home' ? match.home_team.name : match.away_team.name} to win`)
+      setSide(null)
+      refresh()
+    } catch (e) {
+      toast(errorText(e), 'bad')
+    }
+  }
+
+  async function accept(b: BoardBet) {
+    try {
+      const body = b.kind === 'match_result'
+        ? { amount_kobo: slice[b.id] ? Math.round(Number(slice[b.id]) * 100) : b.unmatched_kobo }
+        : { fantasy_team_id: team }
+      await api(`/bets/${b.id}/fills`, token, { method: 'POST', body, idempotencyKey: newIdempotencyKey() })
       setMsg(null)
-      toast('Challenge accepted. Good luck!')
+      toast(b.kind === 'match_result' ? 'Bet taken. Good luck!' : 'Challenge accepted. Good luck!')
       refresh()
     } catch (e) {
       setMsg(errorText(e))
@@ -321,7 +355,7 @@ function ChallengesTab({ match }: { match: Match }) {
   async function cancel(betId: string) {
     try {
       await api(`/bets/${betId}/cancel`, token, { method: 'POST' })
-      toast('Challenge withdrawn')
+      toast('Withdrawn: any stake is back in your wallet')
     } catch (e) {
       toast(errorText(e), 'bad')
     } finally {
@@ -329,17 +363,34 @@ function ChallengesTab({ match }: { match: Match }) {
     }
   }
 
+  const teamName = (s: 'home' | 'away' | null) => (s === 'home' ? match.home_team.name : match.away_team.name)
+  const h2h = (board ?? []).filter((b) => b.kind !== 'match_result')
+  const results = (board ?? []).filter((b) => b.kind === 'match_result')
+
   return (
     <div>
-      <p className="muted">Free head-to-head: your team against someone else's for bragging rights. No money involved.</p>
+      <p className="muted">Head-to-head: your team against someone else's, {paid
+        ? 'for bragging rights or a stake (10% commission on winnings).' : 'for bragging rights.'}</p>
       {status === 'signed_out' && <NeedSignIn what="challenge other fans" />}
+      {status === 'ready' && w && w.paid_play_enabled && w.kyc_status !== 'verified' && (
+        <a className="notice block-link" href="#/verify">🪪 Verify your ID to play challenges for cash →</a>
+      )}
       {status === 'ready' && !match.locked && (
         teams && teams.length > 0 ? (
-          <div className="card">
+          <div className="glass-card">
             <label>Your team for challenges<TeamPicker teams={teams} value={team} onChange={setTeam} /></label>
+            {paid && (
+              <div className="chip-row" role="group" aria-label="Stake">
+                {STAKES.map((s) => (
+                  <button key={s} className={`chip ${stake === s ? 'on' : ''}`} onClick={() => setStake(s)}>{s ? naira(s) : 'Free'}</button>
+                ))}
+              </div>
+            )}
+            {stake > 0 && w && <p className="small muted">Win {naira(winFor(stake))} · pays {payLine(w, stake)}</p>}
             <label className="inline"><input type="checkbox" checked={direct} onChange={(e) => setDirect(e.target.checked)} />
               Link only (don't post on the open board)</label>
-            <button className="primary" disabled={!team} onClick={create}>Create challenge</button>
+            <button className="primary" disabled={!team || !afford(stake)} onClick={create}>
+              {afford(stake) ? 'Create challenge' : 'Not enough in your wallet'}</button>
             {link && (
               <p className="small">Share this link: <code>{link}</code>{' '}
                 <button className="link" onClick={() => navigator.clipboard?.writeText(link)}>Copy</button></p>
@@ -350,18 +401,66 @@ function ChallengesTab({ match }: { match: Match }) {
       {msg && <p className="error">{msg}</p>}
 
       <h3>Open board</h3>
-      {board?.length === 0 && <p className="muted">No open challenges right now.</p>}
+      {h2h.length === 0 && <p className="muted">No open challenges right now.</p>}
       <ul className="plain">
-        {board?.map((b) => (
-          <li key={b.id} className="card row between">
+        {h2h.map((b) => (
+          <li key={b.id} className="glass-card row between">
             <span><strong>{b.creator.team_name}</strong>{' '}
-              <small className="muted">{b.creator.record.won}W {b.creator.record.lost}L {b.creator.record.tied}T</small></span>
+              <small className="muted">{b.creator.record.won}W {b.creator.record.lost}L {b.creator.record.tied}T</small>
+              <span className="small block">{b.stake_kobo ? `Stake ${naira(b.stake_kobo)} · win ${naira(b.win_up_to_kobo)}` : 'Free'}</span></span>
             {b.is_mine ? <button className="link" onClick={() => cancel(b.id)}>Withdraw</button>
               : status === 'ready' && !match.locked && (
-                <button className="primary narrow" disabled={!team} onClick={() => accept(b.id)} title={team ? '' : 'Choose your team above'}>Accept</button>)}
+                <button className="primary narrow" disabled={!team || !afford(b.stake_kobo)} onClick={() => accept(b)}
+                  title={team ? '' : 'Choose your team above'}>Accept</button>)}
           </li>
         ))}
       </ul>
+
+      {resultBets && (
+        <>
+          <h3>Who wins? (Home / Away bets)</h3>
+          <p className="small muted">Back a side; others take the opposite side in slices. A draw refunds everyone. 10% commission on winnings.</p>
+          {!match.locked && (
+            <div className="glass-card">
+              <div className="row gap">
+                {(['home', 'away'] as const).map((s) => (
+                  <button key={s} className={`side-btn ${side === s ? 'on' : ''}`} onClick={() => setSide(s)}>
+                    <TeamBadge name={teamName(s)} colour={(s === 'home' ? match.home_team : match.away_team).colour} small />
+                    <span>{teamName(s)}<small className="block">to win</small></span></button>
+                ))}
+              </div>
+              {side && (
+                <>
+                  <div className="chip-row">
+                    {STAKES.slice(1).map((s) => <button key={s} className={`chip ${betStake === s ? 'on' : ''}`} onClick={() => setBetStake(s)}>{naira(s)}</button>)}
+                  </div>
+                  <button className="primary" disabled={!afford(betStake)} onClick={createResultBet}>
+                    {teamName(side)} to win · stake {naira(betStake)} → up to {naira(winFor(betStake))}</button>
+                </>
+              )}
+            </div>
+          )}
+          <ul className="plain">
+            {results.map((b) => (
+              <li key={b.id} className="glass-card">
+                <div className="row between">
+                  <span><strong>{b.creator.team_name}</strong> backs {teamName(b.side)}
+                    <span className="small block">{naira(b.unmatched_kobo)} left of {naira(b.stake_kobo)}</span></span>
+                  {b.is_mine && b.unmatched_kobo === b.stake_kobo && <button className="link" onClick={() => cancel(b.id)}>Withdraw</button>}
+                </div>
+                {!b.is_mine && status === 'ready' && !match.locked && (
+                  <div className="row gap">
+                    <input inputMode="numeric" placeholder={String(b.unmatched_kobo / 100)} value={slice[b.id] ?? ''}
+                      onChange={(e) => setSlice({ ...slice, [b.id]: e.target.value })} aria-label="Your stake in naira" />
+                    <button className="primary narrow" onClick={() => accept(b)}>Take {teamName(b.your_side)}</button>
+                  </div>
+                )}
+              </li>
+            ))}
+            {results.length === 0 && <li className="muted">No Home/Away bets yet.</li>}
+          </ul>
+        </>
+      )}
 
       {myHere.length > 0 && (
         <>
@@ -372,4 +471,3 @@ function ChallengesTab({ match }: { match: Match }) {
     </div>
   )
 }
-

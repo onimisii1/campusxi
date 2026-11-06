@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { feeLabel, joinable, naira, type Contest, type TeamOption } from '../contests'
+import { newIdempotencyKey, payLine, split, useWallet } from '../money'
 import { signInThenReturn } from '../router'
 import { useSession } from '../session'
 import { useToast } from '../toast'
@@ -60,10 +61,15 @@ function JoinSheet({ contest: c, matchId, teams, onClose, onJoined }: {
   const [error, setError] = useState<string | null>(null)
   const entered = new Set(c.my_entries.map((e) => e.fantasy_team_id))
   const options = (teams ?? []).filter((t) => !entered.has(t.id))
+  const { data: w } = useWallet()
+  const fee = c.late_join ? c.late_join.entry_fee_kobo : c.entry_fee_kobo
+  const short = fee && w ? split(w, fee).short : 0
+  const [key] = useState(newIdempotencyKey)
 
   async function join() {
     try {
-      await api(`/contests/${c.id}/entries`, token, { method: 'POST', body: { fantasy_team_id: team } })
+      await api(`/contests/${c.id}/entries`, token, { method: 'POST', body: { fantasy_team_id: team },
+        idempotencyKey: `${key}-${team}` })
       toast(c.late_join ? `Joined ${c.name} late: points count from now` : `Joined ${c.name}`)
       onJoined()
     } catch (e) {
@@ -91,8 +97,15 @@ function JoinSheet({ contest: c, matchId, teams, onClose, onJoined }: {
           </div>
         )}
         <a className="sheet-btn" href={`#/build/${matchId}`}>+ Build a new team</a>
+        {fee > 0 && w && (
+          w.kyc_status !== 'verified'
+            ? <a className="notice block-link" href="#/verify">🪪 Verify your ID to play for cash →</a>
+            : short > 0
+              ? <a className="notice block-link" href="#/wallet">You need {naira(short)} more · Add money →</a>
+              : <p className="small muted">Pays {payLine(w, fee)}. Prizes are paid in cash 24h after the result.</p>
+        )}
         {error && <p className="error">{error}</p>}
-        <button className="primary" disabled={!team} onClick={join}>
+        <button className="primary" disabled={!team || short > 0} onClick={join}>
           {c.late_join ? `Join late · ${feeLabel(c)}` : `Join · ${feeLabel(c)}`}
         </button>
         <button className="sheet-btn" onClick={onClose}>Cancel</button>

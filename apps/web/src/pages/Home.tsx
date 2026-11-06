@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import MatchCard, { type MatchCardData } from '../components/MatchCard'
+import { EventCard, ScoreCard, type MatchCardData } from '../components/MatchCard'
 import Skeleton from '../components/Skeleton'
 import SportSlider, { savedSport } from '../components/SportSlider'
-import { countdown, kickoff, statusLabel } from '../format'
+import { naira, useWallet } from '../money'
+import { useSession } from '../session'
 import { useApi } from '../useApi'
 
 /** Featured match: a live one first, then the next to lock, then the latest result. */
@@ -13,6 +14,7 @@ function featured(matches: MatchCardData[]): MatchCardData | undefined {
     ?? [...matches].reverse().find((m) => m.status === 'confirmed')
 }
 
+/** Home (design screen 1): greeting, "Choose your Favourite game", sport pills, stacked event cards. */
 export default function Home() {
   const [sport, setSport] = useState(savedSport)
   const { data, error } = useApi<MatchCardData[]>('/matches', 60_000)
@@ -26,40 +28,73 @@ export default function Home() {
 
   return (
     <section>
+      <Greeting />
+      <h1 className="headline">Choose your<br /><b>Favourite game</b></h1>
       <SportSlider value={sport} onChange={setSport} />
       {error && <p className="error">{error}</p>}
       {!data && !error && <Skeleton hero rows={2} />}
       {data && !top && <p className="card muted">No {sport} events yet. Check back soon.</p>}
-      {top && <MatchCard key={top.id} match={top} />}
 
-      {upcoming.length > 0 && <h3>More events</h3>}
-      <ul className="list">{upcoming.map((m) => <Row key={m.id} m={m} />)}</ul>
+      {top && (
+        <>
+          <div className="section-head"><h3>Top Events</h3>
+            <a href={`#/tournament/${top.tournament_id}`}>View All</a></div>
+          <div className={`event-stack ${upcoming[0] ? 'joined' : ''}`}>
+            <EventCard m={top} lime />
+            {upcoming[0] && <EventCard m={upcoming[0]} stacked />}
+          </div>
+        </>
+      )}
 
-      {results.length > 0 && <h3>Results</h3>}
-      <ul className="list">{results.map((m) => <Row key={m.id} m={m} />)}</ul>
+      {upcoming.length > 1 && <div className="section-head"><h3>Up next</h3></div>}
+      <ul className="list">{upcoming.slice(1).map((m) => <li key={m.id}><ScoreCard m={m} /></li>)}</ul>
 
-      {tournaments.length > 0 && <h3>Tournaments</h3>}
+      {results.length > 0 && <div className="section-head"><h3>Results</h3></div>}
+      <ul className="list">{results.map((m) => <li key={m.id}><ScoreCard m={m} /></li>)}</ul>
+
+      {tournaments.length > 0 && <div className="section-head"><h3>Tournaments</h3></div>}
       <ul className="list">
         {tournaments.map(([id, name]) => (
-          <li key={id}><a className="row-card" href={`#/tournament/${id}`}><span><strong>{name}</strong><span className="muted small block">Table, results, top scorers, bracket</span></span><span aria-hidden>→</span></a></li>
+          <li key={id}><a className="row-card" href={`#/tournament/${id}`}>
+            <span><strong>{name}</strong><span className="muted small block">Table, results, top scorers, bracket</span></span>
+            <span className="round-btn small" aria-hidden>›</span></a></li>
         ))}
       </ul>
     </section>
   )
 }
 
-function Row({ m }: { m: MatchCardData }) {
+function Greeting() {
+  const { status, me } = useSession()
+  const { data: w } = useWallet()
+  const h = new Date().getHours()
+  const hello = h < 12 ? 'Good Morning!' : h < 17 ? 'Good Afternoon!' : 'Good Evening!'
+  if (status === 'loading') return <div className="greet" />
+  if (status !== 'ready' || !me) {
+    return (
+      <div className="greet">
+        <span className="who"><span className="avatar">XI</span><span><small>Welcome to</small><strong>CampusXI</strong></span></span>
+        <a className="pill-btn" href={status === 'needs_profile' ? '#/profile' : '#/signin'}>
+          {status === 'needs_profile' ? 'Finish profile' : 'Sign in'}</a>
+      </div>
+    )
+  }
+  const initials = me.team_name.split(/[\s_]+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase()
   return (
-    <li>
-      <a className="row-card" href={`#/match/${m.id}`}>
-        <span>
-          <strong>{m.home_team.name} vs {m.away_team.name}</strong>
-          <span className="muted small block">{kickoff(m.scheduled_start)}</span>
-        </span>
-        <span className={`badge ${m.status === 'live' ? 'bad' : ''}`}>
-          {m.status === 'live' ? '● Live' : m.locked ? statusLabel(m.status) : countdown(m.seconds_to_lock)}
-        </span>
-      </a>
-    </li>
+    <div className="greet">
+      <a className="who plain-link" href="#/me" aria-label="Your profile and menu"><span className="avatar">{initials}</span>
+        <span><small>{hello}</small><strong>{me.team_name}</strong></span></a>
+      <span className="greet-right">
+        {w && (
+          <a className="balance-chip" href="#/wallet" aria-label={`Wallet: ${naira(w.cash_kobo)}`}>
+            {naira(w.cash_kobo)}{w.bonus_kobo > 0 && <small className="coin">{naira(w.bonus_kobo)}</small>}
+          </a>
+        )}
+        <a className="round-btn" href="#/challenges" aria-label="Your challenges">
+          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"
+            fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+        </a>
+      </span>
+    </div>
   )
 }

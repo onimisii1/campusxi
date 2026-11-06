@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { MatchCardData } from '../components/MatchCard'
+import { ScoreCard, type MatchCardData } from '../components/MatchCard'
 import PageHeader from '../components/PageHeader'
 import Skeleton from '../components/Skeleton'
 import { kickoff, points } from '../format'
@@ -30,7 +30,7 @@ type Tab = (typeof TABS)[number]
 /** A competition at a glance: fixtures and results, league table, golden boot / MVP, knockouts. */
 export default function TournamentPage({ tournamentId }: { tournamentId: string }) {
   const { data: t, error } = useApi<Tournament>(`/tournaments/${tournamentId}`)
-  const [tab, setTab] = useState<Tab>('Table')
+  const [tab, setTab] = useState<Tab>('Fixtures')
   if (error) return <p className="error">{error}</p>
   if (!t) return <Skeleton rows={6} />
   const statsLabel = t.sport === 'basketball' ? 'MVP' : t.sport === 'football' ? 'Golden boot' : 'Stats'
@@ -59,7 +59,7 @@ function chipColour(team: { name: string; colour?: string | null }): string {
 
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
 
-function ShareButton({ spec, filename }: { spec: () => CardSpec; filename: string }) {
+function ShareButton({ spec, filename, icon = false }: { spec: () => CardSpec; filename: string; icon?: boolean }) {
   const toast = useToast()
   async function go() {
     try {
@@ -67,6 +67,14 @@ function ShareButton({ spec, filename }: { spec: () => CardSpec; filename: strin
     } catch {
       toast('Could not make the image', 'bad')
     }
+  }
+  if (icon) {
+    return (
+      <button className="round-btn square" onClick={go} aria-label="Share results as an image">
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden><path d="M12 15V4m0 0l-4 4m4-4l4 4M5 13v6h14v-6"
+          fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button>
+    )
   }
   return <button className="share-btn" onClick={go}>⤴ Share as image</button>
 }
@@ -78,8 +86,13 @@ function TeamChip({ team }: { team: { name: string; colour?: string | null } }) 
   return <span className={`team-chip ${light ? 'light' : ''}`} style={{ ['--chip' as string]: home }}>{teamCode(team.name)}</span>
 }
 
+const dayKey = (iso: string) => new Date(iso).toDateString()
+
+/** Fixtures (design screen 2): search a team, pick a day on the strip, live-score cards. */
 function Fixtures({ tournamentId, name }: { tournamentId: string; name: string }) {
   const { data } = useApi<Card[]>(`/matches?tournament_id=${tournamentId}`, 60_000)
+  const [day, setDay] = useState<string | null>(null)
+  const [q, setQ] = useState('')
   if (!data) return <Skeleton rows={5} />
   const finished = data.filter((m) => m.score?.final)
   const lastDay = finished.length ? shortDate(finished[finished.length - 1].scheduled_start) : null
@@ -90,41 +103,43 @@ function Fixtures({ tournamentId, name }: { tournamentId: string; name: string }
       text: `v ${m.away_team.name}`, sub: m.score?.walkover ? 'Walkover' : 'Full time',
       cells: ['', m.score?.walkover ? 'Voided' : `${m.score!.home}–${m.score!.away}`, ''] })),
   })
-  const days = new Map<string, Card[]>()
-  for (const m of data) {
-    const day = new Date(m.scheduled_start).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
-    days.set(day, [...(days.get(day) ?? []), m])
-  }
+  const days = [...new Set(data.map((m) => dayKey(m.scheduled_start)))]
+  const today = new Date().toDateString()
+  const live = data.find((m) => m.status === 'live')
+  const fallback = live ? dayKey(live.scheduled_start) : days.includes(today) ? today
+    : days.find((d) => new Date(d) > new Date()) ?? days[days.length - 1]
+  const selected = day ?? fallback
+  const term = q.trim().toLowerCase()
+  const shown = data.filter((m) => term
+    ? `${m.home_team.name} ${m.away_team.name}`.toLowerCase().includes(term)
+    : dayKey(m.scheduled_start) === selected)
   return (
     <div>
-      {lastDay && <ShareButton spec={resultsSpec} filename="results.png" />}
-      {[...days].map(([day, list]) => (
-        <div key={day}>
-          <h3>{day}</h3>
-          <ul className="plain fixture-list">
-            {list.map((m) => (
-              <li key={m.id}>
-                <a href={`#/match/${m.id}`} className="fixture">
-                  <span className="fx-code">{m.code ?? ''}</span>
-                  <TeamChip team={m.home_team} />
-                  <span className="fx-mid">
-                    {m.score?.walkover
-                      ? <b className="voided">Voided</b>
-                      : m.score
-                      ? <b className={m.score.final ? '' : 'live'}>{m.score.home} – {m.score.away}</b>
-                      : <span>{new Date(m.scheduled_start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>}
-                  </span>
-                  <TeamChip team={m.away_team} />
-                  <span className="fx-note small muted">
-                    {m.score?.walkover ? 'Walkover' : m.status === 'live' ? '● Live' : m.score?.final ? 'FT'
-                      : m.stage !== 'league' ? m.stage.replace('_', ' ') : ''}
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
+      <div className="search-row">
+        <label className="search-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor"
+            strokeWidth="2" /><path d="M20 20l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search team" aria-label="Search team" />
+        </label>
+        {lastDay && <ShareButton spec={resultsSpec} filename="results.png" icon />}
+      </div>
+      {!term && (
+        <div className="day-strip" role="tablist" aria-label="Match days">
+          {days.map((d) => {
+            const dt = new Date(d)
+            return (
+              <button key={d} role="tab" aria-selected={d === selected} className={`day ${d === selected ? 'on' : ''}`}
+                onClick={() => setDay(d)}>
+                <small>{dt.toLocaleDateString(undefined, { weekday: 'short' })}</small>
+                <b>{dt.getDate()}</b>
+                <small>{dt.toLocaleDateString(undefined, { month: 'short' })}</small>
+              </button>
+            )
+          })}
         </div>
-      ))}
+      )}
+      {shown.length === 0 && <p className="muted">No matches{term ? ` for "${q}"` : ' on this day'}.</p>}
+      <ul className="plain">{shown.map((m) => <li key={m.id}><ScoreCard m={m} /></li>)}</ul>
     </div>
   )
 }

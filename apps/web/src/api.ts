@@ -19,7 +19,7 @@ export class ApiError extends Error {
 export class OfflineError extends Error {}
 
 export async function api<T>(path: string, token: string | null,
-  init: { method?: string; body?: unknown; csv?: string } = {}) {
+  init: { method?: string; body?: unknown; csv?: string; idempotencyKey?: string } = {}) {
   let res: Response
   try {
     res = await fetch(`${BASE}${path}`, {
@@ -28,6 +28,7 @@ export async function api<T>(path: string, token: string | null,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(init.csv !== undefined ? { 'Content-Type': 'text/csv' } : {}),
+        ...(init.idempotencyKey ? { 'Idempotency-Key': init.idempotencyKey } : {}),
       },
       body: init.csv ?? (init.body !== undefined ? JSON.stringify(init.body) : undefined),
     })
