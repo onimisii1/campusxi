@@ -28,6 +28,7 @@ type Match = {
   locked: boolean
   seconds_to_lock: number
   late_join_until: number | null
+  score?: { home: number; away: number; walkover: boolean; final: boolean } | null
 }
 type Pick = { athlete_id: string; display_name: string; role: string; position: string; team_id: string; points?: number }
 type Team = { id: string; label: string; picks: Pick[] }
@@ -55,8 +56,8 @@ export default function MatchSection({ matchId, section, focus }: { matchId: str
   return (
     <section>
       <PageHeader title={section === 'teams' && match.locked ? 'My teams' : SECTIONS[section]} back={`#/match/${matchId}`}
-        subtitle={`${match.home_team.name} vs ${match.away_team.name} · ${
-          match.locked ? statusLabel(match.status) : `Deadline ${kickoff(match.scheduled_start)}`}`} />
+        subtitle={`${match.home_team.name} ${match.score ? `${match.score.home}–${match.score.away}` : 'vs'} ${
+          match.away_team.name} · ${match.locked ? statusLabel(match.status) : `Deadline ${kickoff(match.scheduled_start)}`}`} />
       {section === 'contests' && <ContestsTab match={match} />}
       {section === 'teams' && <TeamsTab match={match} focus={focus} />}
       {section === 'live' && <LiveTab match={match} />}
@@ -81,21 +82,79 @@ function TeamPicker({ teams, value, onChange, exclude = [] }: {
   )
 }
 
+const CONTEST_VIEWS = ['all', 'mine', 'teams'] as const
+type ContestView = (typeof CONTEST_VIEWS)[number]
+const SORTS = { default: 'Featured', fee: 'Entry fee', spots: 'Spots', pool: 'Prize pool' } as const
+type Sort = keyof typeof SORTS
+
+/** FantasyFi-style groups: who a contest is for. */
+function contestGroup(c: Contest): string {
+  if (c.entry_fee_kobo === 0) return 'Free'
+  if (c.entry_fee_kobo === 40_000) return 'Mini ₦400'
+  if (c.capacity <= 5) return 'Head-to-head'
+  if (c.capacity >= 100) return 'Mega'
+  return 'Small contests'
+}
+const GROUP_ORDER = ['Free', 'Mega', 'Small contests', 'Head-to-head', 'Mini ₦400']
+const GROUP_BLURB: Record<string, string> = {
+  Free: 'No entry fee: play for bragging rights and the season table.',
+  Mega: 'Big pools, the most entrants.',
+  'Head-to-head': 'Beat a handful of players.',
+  'Mini ₦400': 'Small stakes, same game.',
+}
+
 function ContestsTab({ match }: { match: Match }) {
   const { status } = useSession()
   const { data: contests, reload } = useApi<Contest[]>(`/matches/${match.id}/contests`)
   const { data: teams } = useApi<Team[]>(status === 'ready' ? `/me/teams?match_id=${match.id}` : null)
+  const [view, setView] = useState<ContestView>('all')
+  const [sort, setSort] = useState<Sort>('default')
   if (!contests) return <Skeleton rows={2} />
   const late = contests.find((c) => c.late_join)?.late_join
+  const mine = contests.filter((c) => c.my_entries.length > 0)
+  const value: Record<Sort, (c: Contest) => number> = {
+    default: () => 0, fee: (c) => c.entry_fee_kobo, spots: (c) => -c.capacity,
+    pool: (c) => -(c.entry_fee_kobo * c.capacity),
+  }
+  const sorted = [...(view === 'mine' ? mine : contests)].sort((a, b) => value[sort](a) - value[sort](b))
+  const groups = GROUP_ORDER.map((g) => [g, sorted.filter((c) => contestGroup(c) === g)] as const).filter(([, l]) => l.length)
+  const label = { all: 'All contests', mine: `My contests (${mine.length})`, teams: `My teams (${teams?.length ?? 0})` }
+
   return (
     <div>
-      {late && (
-        <p className="notice">⏱ Late joining is open until minute {late.until_minute}. Points recorded before you
-          join don't count.</p>
+      <div className="tabs" role="tablist">
+        {CONTEST_VIEWS.map((v) => (
+          <button key={v} role="tab" aria-selected={view === v} className={view === v ? 'tab on' : 'tab'}
+            onClick={() => setView(v)}>{label[v]}</button>
+        ))}
+      </div>
+      {view === 'teams' ? <TeamsTab match={match} /> : (
+        <>
+          {late && (
+            <p className="notice">⏱ Late joining is open until minute {late.until_minute}. Points recorded before you
+              join don't count.</p>
+          )}
+          {contests.length > 1 && (
+            <div className="chip-row sort-row" role="group" aria-label="Sort contests">
+              <span className="small muted">Sort</span>
+              {(Object.keys(SORTS) as Sort[]).map((k) => (
+                <button key={k} className={`chip ${sort === k ? 'on' : ''}`} onClick={() => setSort(k)}>{SORTS[k]}</button>
+              ))}
+            </div>
+          )}
+          {view === 'mine' && mine.length === 0 && (
+            <p className="muted">You haven't joined a contest for this match yet.</p>
+          )}
+          {groups.map(([g, list]) => (
+            <div key={g}>
+              {(groups.length > 1 || g !== 'Free') && (
+                <div className="contest-group"><strong>{g}</strong><span className="muted small">{GROUP_BLURB[g] ?? ''}</span></div>
+              )}
+              {list.map((c) => <ContestCard key={c.id} contest={c} matchId={match.id} teams={teams} onChanged={reload} />)}
+            </div>
+          ))}
+        </>
       )}
-      {contests.map((c) => (
-        <ContestCard key={c.id} contest={c} matchId={match.id} teams={teams} onChanged={reload} />
-      ))}
     </div>
   )
 }

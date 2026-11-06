@@ -50,14 +50,15 @@ Routes so far (Phases 2–4):
 
 | Area | Routes |
 |---|---|
-| Lobby | `GET /sports`, `/sports/{code}/rules`, `/schools`, `/tournaments`, `/tournaments/{id}`, `/tournaments/{id}/leaderboard`, `/matches`, `/matches/{id}`, `/matches/{id}/live` |
+| Lobby | `GET /sports`, `/sports/{code}/rules`, `/schools`, `/tournaments/{id}/standings`, `/tournaments/{id}/stats`, `/tournaments/{id}/bracket`, `/athletes/{id}`, `/tournaments`, `/tournaments/{id}`, `/tournaments/{id}/leaderboard`, `/matches`, `/matches/{id}`, `/matches/{id}/live` |
 | Profile | `POST /me` (team name, school, 18+ date of birth), `GET /me` |
 | Team builder | `POST /matches/{id}/teams`, `PUT /teams/{id}`, `GET /me/teams`, `GET /teams/{id}/breakdown` |
 | Contests | `GET /matches/{id}/contests`, `POST /contests/{id}/entries`, `DELETE /entries/{id}`, `GET /contests/{id}/leaderboard`, `GET /contests/{id}/payout-preview`, `POST /admin/matches/{id}/contests` |
 | Challenges | `POST /bets`, `GET /matches/{id}/bets`, `GET /bets/invite/{token}`, `POST /bets/{id}/fills`, `POST /bets/{id}/cancel`, `GET /me/bets` |
 | Scorer | `GET /scorer/matches`, `GET /scorer/matches/{id}`, `POST /scorer/matches/{id}/events`, `POST /scorer/matches/{id}/submit` |
 | Admin setup | `POST /admin/tournaments`, `.../{id}/squads` (CSV), `.../{id}/fixtures` (CSV), `.../{id}/publish`, `POST /admin/matches/{id}/lineup`, `.../scorers`, `POST /admin/users/{id}/roles`, `POST /admin/schools` |
-| Admin results | `GET /admin/matches/{id}/reconcile`, `POST /admin/matches/{id}/confirm`, `.../reopen`, `.../abandon`, `.../postpone` |
+| Admin results | `GET /admin/matches/{id}/reconcile`, `POST /admin/matches/{id}/confirm`, `.../reopen`, `.../abandon`, `.../postpone`, `.../kickoff`, `.../walkover` |
+| Competition | `GET /admin/tournaments/{id}/matches`, `GET /admin/users?role=scorer`, `POST /admin/tournaments/{id}/knockout`, `.../results` (CSV), `.../result-stats` (CSV), `POST /scorer/matches/{id}/kickoff` |
 
 ### Scoring workflow
 
@@ -82,6 +83,22 @@ defender has been on the pitch for 60% of the match and disappear if their side 
 - Confirming a result records final contest ranks and challenge results; abandoning voids them.
 - The season table adds up each player's best team from every confirmed match.
 - Paid entry and stakes are switched off (`PAID_PLAY_ENABLED=false`) until Phase 5.
+
+### Running a competition
+
+- **Kick off now** (admin screen or scorer app) starts the match clock when the referee does;
+  teams still lock at the scheduled time. Delay buttons move the kick-off and reopen teams.
+- **Walkover:** the winner gets the league points (placeholder 3–0 football, 20–0 basketball);
+  fantasy contests and challenges for that match are voided.
+- **League tables:** football W3 D1 L0 (points, goal difference, goals scored); basketball W2 L0
+  (points, points difference, points scored). Teams level on every tiebreak share a rank ("2=").
+- **Golden boot** (goals, then assists, then fewer matches) and **basketball MVP**
+  (PTS + 1.2 REB + 1.5 AST + 2.5 STL + 2 BLK), from official stats.
+- **Knockouts** are added by hand; the bracket suggests 1v4 and 2v3 from the table.
+- **Past results** (before the app was used) import as `code,home_team,away_team,home_score,away_score,played_at`,
+  with optional stat lines `code,team,athlete,goals,assists` or `...,pts,reb,ast,stl,blk`.
+- Basketball is positionless (any 8, max 5 from one side) and scored with the MVP weights
+  (`basketball-v2-draft`); matches pinned to v1 keep v1.
 
 ### Late joining
 
@@ -131,7 +148,15 @@ Contests are cards with the prize, a filled-spots bar and a Join button that ope
 choose a team. A contest's page has Winnings (prize table if it fills, or as it stands now),
 Rules and Entries tabs, with Leaderboard first once the match starts. The team builder has
 position tabs that show how many more of each you need, plus a Line-ups tab listing both squads
-side by side.
+side by side, and each player's points in their team's last match.
+
+After saving a team, a sheet offers the open contests to join with it; every team card shows the
+contests it's in. The contests page has All contests / My contests / My teams tabs, sort chips
+and groups (Free, Mega, Head-to-head, Mini). Each tournament has a page with fixtures and results,
+the league table, golden boot or MVP, and the bracket, each shareable as an image (Canvas, Web
+Share API, download fallback). Players have profile pages with match-by-match fantasy points.
+Admins run match day at `#/admin`: kick-offs, delays, walkovers, scorers, line-ups, results,
+CSV imports and knockouts.
 
 Production builds register a service worker (`vite-plugin-pwa`): the app installs to the home
 screen and opens without signal. Only purely public match data is cached by it.
@@ -165,5 +190,6 @@ local database first.
 - Phase 2 (data model, admin setup, team builder API): done.
 - Phase 3 (scorer API and app, live points, reconciliation, confirmation): done.
 - Phase 4 (fan app and free pilot: contests, leaderboards, free challenges, season table): done.
+- NUESA 2026/27 (Nile University): competition model, admin screen, tournament pages, profiles: done.
 - Next: the pilot itself (needs a Supabase project and a school sports week), then Phase 5
   (KYC, wallet, paid contests), which is gated on the licence and school approval.

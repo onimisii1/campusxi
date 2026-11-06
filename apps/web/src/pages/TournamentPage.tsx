@@ -4,6 +4,8 @@ import PageHeader from '../components/PageHeader'
 import Skeleton from '../components/Skeleton'
 import { kickoff, points } from '../format'
 import { sideColours, teamCode } from '../teamStyle'
+import { shareCard, type CardSpec } from '../shareCard'
+import { useToast } from '../toast'
 import { useApi } from '../useApi'
 
 type TeamRef = { id: string; name: string; colour: string | null }
@@ -42,13 +44,31 @@ export default function TournamentPage({ tournamentId }: { tournamentId: string 
             onClick={() => setTab(x)}>{x === 'Stats' ? statsLabel : x}</button>
         ))}
       </div>
-      {tab === 'Fixtures' && <Fixtures tournamentId={t.id} />}
-      {tab === 'Table' && <LeagueTable tournamentId={t.id} sport={t.sport} />}
-      {tab === 'Stats' && <PlayerStats tournamentId={t.id} />}
+      {tab === 'Fixtures' && <Fixtures tournamentId={t.id} name={t.name} />}
+      {tab === 'Table' && <LeagueTable tournamentId={t.id} sport={t.sport} name={t.name} />}
+      {tab === 'Stats' && <PlayerStats tournamentId={t.id} name={t.name} />}
       {tab === 'Bracket' && <BracketView tournamentId={t.id} colours={colours} />}
       <a className="row-card" href={`#/table/${t.id}`}><strong>Fantasy season table</strong><span aria-hidden>→</span></a>
     </section>
   )
+}
+
+function chipColour(team: { name: string; colour?: string | null }): string {
+  return sideColours(team, { name: '' }).home
+}
+
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+
+function ShareButton({ spec, filename }: { spec: () => CardSpec; filename: string }) {
+  const toast = useToast()
+  async function go() {
+    try {
+      if (await shareCard(spec(), filename) === 'downloaded') toast('Image saved: post it on WhatsApp or your status')
+    } catch {
+      toast('Could not make the image', 'bad')
+    }
+  }
+  return <button className="share-btn" onClick={go}>⤴ Share as image</button>
 }
 
 function TeamChip({ team }: { team: { name: string; colour?: string | null } }) {
@@ -58,9 +78,18 @@ function TeamChip({ team }: { team: { name: string; colour?: string | null } }) 
   return <span className={`team-chip ${light ? 'light' : ''}`} style={{ ['--chip' as string]: home }}>{teamCode(team.name)}</span>
 }
 
-function Fixtures({ tournamentId }: { tournamentId: string }) {
+function Fixtures({ tournamentId, name }: { tournamentId: string; name: string }) {
   const { data } = useApi<Card[]>(`/matches?tournament_id=${tournamentId}`, 60_000)
   if (!data) return <Skeleton rows={5} />
+  const finished = data.filter((m) => m.score?.final)
+  const lastDay = finished.length ? shortDate(finished[finished.length - 1].scheduled_start) : null
+  const resultsSpec = (): CardSpec => ({
+    title: 'Results', kicker: name, badge: lastDay ?? undefined, headers: ['', 'Score', ''],
+    rows: finished.filter((m) => shortDate(m.scheduled_start) === lastDay).map((m) => ({
+      rank: m.code ?? '', chip: { code: teamCode(m.home_team.name), colour: chipColour(m.home_team) },
+      text: `v ${m.away_team.name}`, sub: m.score?.walkover ? 'Walkover' : 'Full time',
+      cells: ['', `${m.score!.home}–${m.score!.away}`, ''] })),
+  })
   const days = new Map<string, Card[]>()
   for (const m of data) {
     const day = new Date(m.scheduled_start).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
@@ -68,6 +97,7 @@ function Fixtures({ tournamentId }: { tournamentId: string }) {
   }
   return (
     <div>
+      {lastDay && <ShareButton spec={resultsSpec} filename="results.png" />}
       {[...days].map(([day, list]) => (
         <div key={day}>
           <h3>{day}</h3>
@@ -97,12 +127,24 @@ function Fixtures({ tournamentId }: { tournamentId: string }) {
   )
 }
 
-function LeagueTable({ tournamentId, sport }: { tournamentId: string; sport: string }) {
+function LeagueTable({ tournamentId, sport, name }: { tournamentId: string; sport: string; name: string }) {
   const { data } = useApi<{ rows: Standing[] }>(`/tournaments/${tournamentId}/standings`, 60_000)
   if (!data) return <Skeleton rows={6} />
   const football = sport === 'football'
+  const played = data.rows.reduce((n, r) => n + r.played, 0) / 2
+  const spec = (): CardSpec => ({
+    title: 'League table', kicker: name, badge: `${played} ${played === 1 ? 'match' : 'matches'} played`,
+    headers: football ? ['P', 'W', 'D', 'L', 'GD', 'Pts'] : ['P', 'W', 'L', 'PD', 'Pts'],
+    rows: data.rows.map((r) => ({
+      rank: `${r.rank}${r.shared ? '=' : ''}`, chip: { code: teamCode(r.team.name), colour: chipColour(r.team) },
+      text: '', highlight: r.rank <= 4,
+      cells: [String(r.played), String(r.won), ...(football ? [String(r.drawn)] : []), String(r.lost),
+        r.difference > 0 ? `+${r.difference}` : String(r.difference), String(r.points)] })),
+    note: 'Shaded: top 4 reach the semi-finals',
+  })
   return (
     <div>
+      <ShareButton spec={spec} filename="league-table.png" />
       <div className="table-scroll">
         <table className="board league">
           <thead>
@@ -129,13 +171,25 @@ function LeagueTable({ tournamentId, sport }: { tournamentId: string; sport: str
   )
 }
 
-function PlayerStats({ tournamentId }: { tournamentId: string }) {
+function PlayerStats({ tournamentId, name }: { tournamentId: string; name: string }) {
   const { data } = useApi<Stats>(`/tournaments/${tournamentId}/stats`, 60_000)
   if (!data) return <Skeleton rows={5} />
   if (data.players.length === 0) return <p className="muted">No stats yet: they appear once results are confirmed.</p>
   const mvp = data.kind === 'mvp'
+  const spec = (): CardSpec => ({
+    title: mvp ? 'Basketball MVP' : 'Golden boot', kicker: name, badge: `Top ${Math.min(10, data.players.length)}`,
+    headers: mvp ? ['PTS', 'REB', 'AST', 'Total'] : ['MP', 'Ast', 'Goals'],
+    rows: data.players.slice(0, 10).map((p) => ({
+      rank: `${p.rank}${p.shared ? '=' : ''}`, chip: { code: teamCode(p.team.name), colour: chipColour(p.team) },
+      text: p.name, highlight: p.rank === 1,
+      cells: mvp ? [String(p.points), String(p.rebounds), String(p.assists), points(p.total ?? 0)]
+        : [String(p.matches), String(p.assists), String(p.goals)] })),
+    note: mvp ? 'Points ×1 · Rebounds ×1.2 · Assists ×1.5 · Steals ×2.5 · Blocks ×2'
+      : 'Most goals, then assists, then fewer matches',
+  })
   return (
     <div>
+      <ShareButton spec={spec} filename={mvp ? 'mvp.png' : 'golden-boot.png'} />
       <p className="muted small">{mvp ? 'Points ×1 · Rebounds ×1.2 · Assists ×1.5 · Steals ×2.5 · Blocks ×2'
         : 'Most goals, then assists, then fewer matches'}</p>
       <div className="table-scroll">

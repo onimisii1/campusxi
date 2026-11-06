@@ -1867,3 +1867,31 @@ table.league tr.qualify td {
   font-size: 0.7rem;
   color: var(--muted);
 }
+
+/* ---------- contest list ---------- */
+.sort-row {
+  align-items: center;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+
+.sort-row .chip {
+  white-space: nowrap;
+}
+
+.contest-group {
+  display: grid;
+  margin: 14px 0 6px;
+}
+
+.share-btn {
+  display: block;
+  margin: 10px 0 0 auto;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: inherit;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
