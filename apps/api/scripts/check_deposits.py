@@ -26,10 +26,13 @@ def main(argv) -> int:
     print(f"Database: {mask_db(ENV.get('DATABASE_URL', ''))}  (read-only)\n")
     with psycopg.connect(ENV["DATABASE_URL"], row_factory=dict_row, connect_timeout=15) as conn:
         conn.read_only = True
-        rows = conn.execute("""select d.created_at, d.amount_kobo, d.status, coalesce(d.provider, d.psp) as psp, d.channel, d.payer_name,
+        rows = conn.execute("""select d.id, d.psp_reference, d.created_at, d.amount_kobo, d.status, coalesce(d.provider, d.psp) as psp, d.channel, d.payer_name,
                                       d.payer_bank, d.payer_account_tail, d.webhook_payload, u.team_name, u.legal_name
                                from deposits d join users u on u.id = d.user_id
                                order by d.created_at desc limit %s""", (limit,)).fetchall()
+        fails = {a["target_id"]: a["details"] for a in conn.execute(
+            """select target_id, details from audit_log where action = 'deposit.fail' and target_id = any(%s)""",
+            ([r["id"] for r in rows],)).fetchall()}
     if not rows:
         print("No deposits yet.")
         return 0
@@ -41,6 +44,11 @@ def main(argv) -> int:
               f"  player: {r['team_name']}")
         print(f"   payer name: {r['payer_name'] or '(none)'}   bank: {r['payer_bank'] or '(none)'}"
               f"   account ends: {r['payer_account_tail'] or '(none)'}")
+        print(f"   reference: {r['psp_reference']}")
+        if r["id"] in fails:
+            got = fails[r["id"]].get("provider_amount")
+            print(f"   marked failed; provider reported amount: "
+                  f"{'N%s' % format(int(got) // 100, ',') if isinstance(got, int) else got}")
         print(f"   player's saved legal name: {r['legal_name'] or '(none)'}")
         if isinstance(auth, dict):
             print(f"   webhook authorization fields: {', '.join(sorted(auth)) or '(empty)'}")
