@@ -12,8 +12,8 @@ type Finance = {
   withdrawals_paid_24h_kobo: number; withdrawals_awaiting: number; paid_play_enabled: boolean
   ledger: { balanced: boolean; total_kobo: number; negative_accounts: { account: string; b: number }[] }
 }
-type Queued = { id: string; amount_kobo: number; created_at: string; team_name: string; bank_name: string | null
-  account_name: string | null; last4: string | null; paid_before: number }
+type Queued = { id: string; user_id: string; amount_kobo: number; created_at: string; team_name: string
+  legal_name: string | null; bank_name: string | null; account_name: string | null; last4: string | null; paid_before: number }
 
 /** Money at a glance, the ledger check, and the withdrawal approval queue. */
 export default function AdminFinance() {
@@ -29,6 +29,20 @@ export default function AdminFinance() {
       await api(`/admin/withdrawals/${id}/${action}`, token, { method: 'POST' })
       toast(action === 'approve' ? 'Approved: transfer sent' : 'Rejected: money returned')
       reload()
+      reloadQueue()
+    } catch (e) {
+      toast(errorText(e), 'bad')
+    }
+  }
+
+  // The bank name comes from a player's first bank-transfer deposit and they can't change it; when that
+  // deposit came from someone else's account (a parent, a friend), an admin corrects it here.
+  async function correctName(q: Queued) {
+    const name = window.prompt(`Correct ${q.team_name}'s bank name (as on their own bank account):`, q.legal_name ?? '')
+    if (!name || name.trim() === q.legal_name) return
+    try {
+      await api(`/admin/users/${q.user_id}/bank-name`, token, { method: 'PUT', body: { legal_name: name } })
+      toast('Bank name corrected')
       reloadQueue()
     } catch (e) {
       toast(errorText(e), 'bad')
@@ -58,6 +72,8 @@ export default function AdminFinance() {
             <div className="row between"><strong>{q.team_name}</strong><strong>{naira(q.amount_kobo)}</strong></div>
             <p className="small muted">{q.bank_name} ····{q.last4} · {q.account_name} · {q.paid_before ? `${q.paid_before} paid before` : 'first withdrawal'}
               {' · '}{new Date(q.created_at).toLocaleString()}</p>
+            <p className="small">Bank name on CampusXI: <b>{q.legal_name ?? 'not set'}</b>{' '}
+              <button className="link" onClick={() => correctName(q)}>Correct</button></p>
             <div className="row gap">
               <button className="primary" onClick={() => decide(q.id, 'approve')}>Approve</button>
               <button className="sheet-btn" onClick={() => decide(q.id, 'reject')}>Reject</button>

@@ -46,24 +46,22 @@ def test_withdrawals_only_back_to_the_account_that_paid_in_and_in_your_name(psp,
     u = make_user(db, school, team_name="chioma_fc")
     admin = make_user(db, school, roles=("player", "admin"), team_name="money_admin")
     client.post("/me/confirm-18", headers=auth(u), json={"confirm": True})
-    _paid_in(client, psp, u, 2_000_000)
     add = lambda number: client.post("/me/bank-accounts", headers=auth(u),  # noqa: E731
                                      json={"bank_code": "058", "account_number": number}).json()
+    assert add("0123456789")["error"]["code"] == "legal_name_required"        # no deposit, no bank name yet
+    assert client.put("/me/legal-name", headers=auth(u), json={"legal_name": "Musa Bello"}).status_code in (404, 405)
 
-    assert add("0123456789")["error"]["code"] == "legal_name_required"
-    assert client.put("/me/legal-name", headers=auth(u), json={"legal_name": "Chioma"}).json()["error"][
-        "code"] == "bad_legal_name"
-    assert client.put("/me/legal-name", headers=auth(u), json={"legal_name": " Chioma  Obi "}).json() == {
-        "legal_name": "Chioma Obi"}
+    _paid_in(client, psp, u, 2_000_000)                       # the bank reports the payer: that's the name
+    w = client.get("/me/wallet", headers=auth(u)).json()
+    assert (w["legal_name"], w["legal_name_locked"]) == ("OBI ADA CHIOMA", True)
+    _paid_in(client, psp, u, 100_000, {**SENDER, "sender_name": "MUSA BELLO"})   # later payers don't change it
+    assert client.get("/me/wallet", headers=auth(u)).json()["legal_name"] == "OBI ADA CHIOMA"
     psp.account_name = "MUSA BELLO"
     assert add("0123456789")["error"]["code"] == "name_mismatch"               # someone else's account
     psp.account_name = "OBI ADA CHIOMA"
     assert add("0123450000")["error"]["code"] == "not_funding_account"         # never paid in from it
     acct = add("0123456789")
     assert acct["last4"] == "6789"
-    assert client.put("/me/legal-name", headers=auth(u), json={"legal_name": "Musa Bello"}).json()["error"][
-        "code"] == "legal_name_locked"
-    assert client.get("/me/wallet", headers=auth(u)).json()["legal_name_locked"] is True
 
     w = client.post("/wallet/withdrawals", headers=auth(u), json={"amount_kobo": 500_000,
                                                                   "bank_account_id": acct["id"]}).json()
@@ -81,7 +79,6 @@ def test_withdrawals_only_back_to_the_account_that_paid_in_and_in_your_name(psp,
 def test_bank_name_that_doesnt_line_up_goes_to_an_admin(psp, client, db):
     u = make_user(db, make_school(db), team_name="chioma_fc")
     client.post("/me/confirm-18", headers=auth(u), json={"confirm": True})
-    client.put("/me/legal-name", headers=auth(u), json={"legal_name": "Chioma Obi"})
     _paid_in(client, psp, u, 2_000_000, {**SENDER, "sender_bank": "Guaranty Trust Bank"})
     acct = client.post("/me/bank-accounts", headers=auth(u), json={"bank_code": "058", "account_number": "0123456789"}
                        ).json()
@@ -112,3 +109,30 @@ def test_referral_coins_only_from_a_bank_account_no_one_else_paid_in_from(psp, c
     assert client.get("/me/wallet", headers=auth(referrer)).json()["bonus_kobo"] == settings.referral_bonus_kobo
     c = wallet.ledger_check(db)
     assert c["balanced"] and c["negative_accounts"] == []
+
+
+def test_admin_sees_where_the_bank_name_came_from_and_can_correct_it(psp, client, db):
+    school = make_school(db)
+    u = make_user(db, school, team_name="chioma_fc")
+    admin = make_user(db, school, roles=("player", "admin"), team_name="money_admin")
+    other_admin = make_user(db, make_school(db, "Other Poly"), roles=("player", "admin"), team_name="far_admin")
+    client.post("/me/confirm-18", headers=auth(u), json={"confirm": True})
+    _paid_in(client, psp, u, 500_000, {**SENDER, "sender_name": "OBI MARY (MUM)"})    # paid from a parent's account
+    view = client.get(f"/admin/users/{u}/bank-name", headers=auth(admin)).json()
+    assert view["legal_name"] == "OBI MARY (MUM)" and view["deposits_from"][0]["payer_account_tail"] == "6789"
+    assert client.get(f"/admin/users/{u}/bank-name", headers=auth(other_admin)).status_code == 403
+    assert client.put(f"/admin/users/{u}/bank-name", headers=auth(admin), json={"legal_name": "Chioma"}).json()[
+        "error"]["code"] == "bad_legal_name"
+    fixed = client.put(f"/admin/users/{u}/bank-name", headers=auth(admin), json={"legal_name": " Obi  Ada Chioma "})
+    assert fixed.json()["legal_name"] == "Obi Ada Chioma"
+    assert client.get("/me/wallet", headers=auth(u)).json()["legal_name"] == "Obi Ada Chioma"
+    assert client.put(f"/admin/users/{u}/bank-name", headers=auth(u), json={"legal_name": "Me Myself"}).status_code == 403
+    audit = db.execute("select details from audit_log where action = 'user.correct_bank_name'").fetchone()["details"]
+    assert audit["before"] == "OBI MARY (MUM)" and audit["after"] == "Obi Ada Chioma"
+
+
+def test_no_payer_name_means_no_bank_name_until_an_admin_sets_it(psp, client, db):
+    u = make_user(db, make_school(db), team_name="chioma_fc")
+    client.post("/me/confirm-18", headers=auth(u), json={"confirm": True})
+    _paid_in(client, psp, u, 500_000, {})                     # the provider didn't say who paid
+    assert client.get("/me/wallet", headers=auth(u)).json()["legal_name"] is None

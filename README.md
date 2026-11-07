@@ -200,10 +200,13 @@ results and scorers through the app's own admin import, and refuses to load twic
    `KYC_REQUIRED=true`. The `stub` provider is for test mode only.
 
    **Until then, ID checks are optional** (`KYC_REQUIRED=false`, the default), SportyBet-style:
-   players tick "I'm 18 or older" (`POST /me/confirm-18`) and give their full name as on their bank
-   account (`PUT /me/legal-name`; locked once a bank account is saved). Deposits are **bank transfer
-   only**, and the provider's verify tells us who paid (name, bank, last four digits). A bank account
-   can only be added, and a withdrawal only sent, if its bank-confirmed name matches that full name
+   players tick "I'm 18 or older" (`POST /me/confirm-18`). Deposits are **bank transfer only**, and the
+   provider's verify tells us who paid (name, bank, last four digits). Players never type their bank
+   name: the payer name on their **first** bank-transfer deposit becomes it, locked (Ellie's rule); an
+   admin can see where it came from and correct it (`GET`/`PUT /admin/users/{id}/bank-name`, or
+   "Correct" in `#/admin/finance`), e.g. when the first deposit came from a parent's account. If the
+   provider reports no payer name, the name stays empty until an admin sets it. A bank account can
+   only be added, and a withdrawal only sent, if its bank-confirmed name matches that bank name
    **and** it has paid into the wallet; if the bank names don't line up, an admin approves. Referral
    coins are paid when the friend's first ₦1,000+ deposit comes from an account no other player has
    paid in from.

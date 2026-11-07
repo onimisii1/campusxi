@@ -114,6 +114,7 @@ def _w(w):
 def withdrawal_queue(status: str = "awaiting_approval", user=Depends(require_admin), conn=Depends(get_conn)):
     return conn.execute(
         """select w.id, w.amount_kobo, w.status, w.created_at, w.failure_reason, u.team_name, u.id as user_id,
+                  u.legal_name,
                   b.bank_name, b.account_name, right(b.account_number, 4) as last4,
                   (select count(*) from withdrawals x where x.user_id = w.user_id and x.status = 'paid') as paid_before
            from withdrawals w join users u on u.id = w.user_id left join bank_accounts b on b.id = w.bank_account_id

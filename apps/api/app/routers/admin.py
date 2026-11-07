@@ -7,6 +7,7 @@ from datetime import timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, Field
 
 from app import notify
 from app.audit import audit
@@ -618,6 +619,42 @@ def needs_attention(user=Depends(require_admin), conn=Depends(get_conn), now=Dep
              and coalesce(m.kicked_off_at, m.scheduled_start) < %s - interval '3 hours'
              and (%s or t.school_id = %s) order by m.scheduled_start""",
         (now, "superadmin" in user["roles"], user["school_id"])).fetchall()
+
+
+class LegalNameIn(BaseModel):
+    legal_name: str = Field(min_length=3, max_length=120)
+
+
+@router.get("/users/{user_id}/bank-name")
+def bank_name(user_id: UUID, user=Depends(require_admin), conn=Depends(get_conn)):
+    """A player's locked bank name and where it came from (their bank-transfer deposits), for support."""
+    target = conn.execute("select id, school_id, team_name, legal_name from users where id = %s", (user_id,)).fetchone()
+    if target is None:
+        raise ApiError(404, "user_not_found", "user not found")
+    _guard_school(user, target["school_id"])
+    payers = conn.execute(
+        """select payer_name, payer_bank, payer_account_tail, amount_kobo, created_at from deposits
+           where user_id = %s and status = 'success' and payer_name is not null order by created_at""",
+        (user_id,)).fetchall()
+    return {"user_id": target["id"], "team_name": target["team_name"], "legal_name": target["legal_name"],
+            "deposits_from": payers}
+
+
+@router.put("/users/{user_id}/bank-name")
+def correct_bank_name(user_id: UUID, body: LegalNameIn, user=Depends(require_admin), conn=Depends(get_conn)):
+    """Players can't change the bank name taken from their first deposit; an admin can correct it
+    (e.g. the first deposit came from a parent's account). Withdrawals then match the new name."""
+    target = conn.execute("select id, school_id, legal_name from users where id = %s and deleted_at is null",
+                          (user_id,)).fetchone()
+    if target is None:
+        raise ApiError(404, "user_not_found", "user not found")
+    _guard_school(user, target["school_id"])
+    name = " ".join(body.legal_name.split())
+    if len(name.split()) < 2:
+        raise ApiError(422, "bad_legal_name", "give a first name and surname, as on the bank account")
+    conn.execute("update users set legal_name = %s where id = %s", (name, user_id))
+    audit(conn, user["id"], "user.correct_bank_name", "user", user_id, before=target["legal_name"], after=name)
+    return {"user_id": user_id, "legal_name": name}
 
 
 @router.post("/users/{user_id}/roles")

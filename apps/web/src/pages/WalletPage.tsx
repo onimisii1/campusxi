@@ -51,7 +51,9 @@ export default function WalletPage() {
       </div>
       {tab === 'Add money' && <Deposit minimum={w.min_deposit_kobo} disabled={!w.can_play_paid} transferOnly={!w.kyc_required} />}
       {tab === 'Withdraw' && <Withdraw cash={w.cash_kobo} minimum={w.min_withdrawal_kobo}
-        verified={w.kyc_required ? w.kyc_status === 'verified' : !!w.legal_name}
+        blocked={w.kyc_required
+          ? (w.kyc_status === 'verified' ? null : 'Verify your ID first.')
+          : (w.legal_name ? null : 'Add money by bank transfer first: winnings can only go back to the account you paid from.')}
         legalName={w.kyc_required ? null : w.legal_name} onDone={reload} />}
       {tab === 'History' && <History />}
       <div className="link-pair">
@@ -62,51 +64,36 @@ export default function WalletPage() {
   )
 }
 
-/** KYC optional for now (SportyBet-style): tick 18+, and give the full name your bank account is in. */
+/** KYC optional for now (SportyBet-style): tick 18+. The bank name isn't typed: it comes from the first
+ *  bank-transfer deposit and is locked (support can correct it). */
 function StartChecks({ w, onDone }: { w: Wallet; onDone: () => void }) {
   const { token } = useSession()
   const toast = useToast()
   const [ticked, setTicked] = useState(false)
-  const [name, setName] = useState(w.legal_name ?? '')
-  const [editing, setEditing] = useState(!w.legal_name)
-  const run = async (fn: () => Promise<unknown>, done: string) => {
-    try {
-      await fn()
-      toast(done)
-      onDone()
-    } catch (e) {
-      toast(errorText(e), 'bad')
-    }
-  }
-  if (w.adult_confirmed && w.legal_name && !editing) {
+  if (!w.adult_confirmed) {
     return (
-      <div className="glass-card row between start-checks done">
-        <span className="small"><span className="muted">Bank name</span> <b>{w.legal_name}</b></span>
-        {!w.legal_name_locked && <button className="link" onClick={() => setEditing(true)}>Change</button>}
+      <div className="glass-card start-checks">
+        <strong>Play for cash</strong>
+        <label className="inline small"><input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} />
+          I'm 18+ and play with my own money</label>
+        <button className="primary" disabled={!ticked} onClick={async () => {
+          try {
+            await api('/me/confirm-18', token, { method: 'POST', body: { confirm: true } })
+            toast('Done: add money to start')
+            onDone()
+          } catch (e) {
+            toast(errorText(e), 'bad')
+          }
+        }}>Confirm</button>
       </div>
     )
   }
-  // One form, one button: the 18+ tick and the bank-account name are saved together.
-  const needAdult = !w.adult_confirmed
-  const needName = editing || !w.legal_name
-  const nameOk = name.trim().split(/\s+/).length >= 2
   return (
-    <div className="glass-card start-checks">
-      <strong>Play for cash</strong>
-      {needName && (
-        <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name"
-          placeholder="Full name, as on your bank account" aria-label="Full name, as on your bank account" />
-      )}
-      {needAdult && (
-        <label className="inline small"><input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} />
-          I'm 18+ and play with my own money</label>
-      )}
-      <button className="primary" disabled={(needAdult && !ticked) || (needName && !nameOk)}
-        onClick={() => run(async () => {
-          if (needAdult) await api('/me/confirm-18', token, { method: 'POST', body: { confirm: true } })
-          if (needName) await api('/me/legal-name', token, { method: 'PUT', body: { legal_name: name } })
-          setEditing(false)
-        }, 'Saved: paid play is open')}>Save</button>
+    <div className="glass-card start-checks done bank-name">
+      {w.legal_name
+        ? <span className="small"><span className="muted block">Bank name · from your first deposit</span>
+            <b>🔒 {w.legal_name}</b></span>
+        : <span className="small muted">Your first deposit by bank transfer sets the bank name your winnings go to.</span>}
     </div>
   )
 }
@@ -151,8 +138,8 @@ function Deposit({ minimum, disabled, transferOnly }: { minimum: number; disable
   )
 }
 
-function Withdraw({ cash, minimum, verified, legalName, onDone }: {
-  cash: number; minimum: number; verified: boolean; legalName: string | null; onDone: () => void
+function Withdraw({ cash, minimum, blocked, legalName, onDone }: {
+  cash: number; minimum: number; blocked: string | null; legalName: string | null; onDone: () => void
 }) {
   const { token } = useSession()
   const toast = useToast()
@@ -179,12 +166,14 @@ function Withdraw({ cash, minimum, verified, legalName, onDone }: {
     }
   }
 
-  if (!verified) {
-    return <p className="muted">{legalName === null ? 'Verify your ID first.' : 'Save your bank name above first.'}</p>
+  if (blocked) {
+    return <p className="muted">{blocked}</p>
   }
   return (
     <div>
       <div className="glass-card">
+        {legalName && <p className="small muted">Only to an account in the name <b className="ink">{legalName}</b> that you've
+          paid in from.</p>}
         {accounts?.length ? (
           <label>To
             <select value={account} onChange={(e) => setAccount(e.target.value)}>

@@ -61,6 +61,7 @@ def settle_deposit(conn, reference: str, now) -> dict:
                          (now, payment.channel, payment.fee_kobo, (payment.payer_name or "").strip() or None,
                           payment.payer_bank, account_tail(payment.payer_account), now, d["id"])).fetchone()
         audit(conn, None, "deposit.credit", "deposit", d["id"], amount_kobo=d["amount_kobo"])
+        name_from_bank(conn, d["user_id"], d["payer_name"], d["id"])
         maybe_reward(conn, d["user_id"], now)
     elif payment.status == "failed" or (payment.status == "success" and payment.amount_kobo != d["amount_kobo"]):
         d = conn.execute("update deposits set status = 'failed', updated_at = %s where id = %s returning *",
@@ -102,6 +103,18 @@ def same_bank(a: str | None, b: str | None) -> bool:
     return bool(wa & wb) or bool(a and b and (a.upper() in b.upper() or b.upper() in a.upper()))
 
 
+def name_from_bank(conn, user_id, payer_name: str | None, deposit_id) -> None:
+    """Ellie, Nov 2026: players don't type their bank name. The name the payment provider reports on
+    their first bank-transfer deposit becomes it, locked; only an admin can correct it."""
+    name = " ".join((payer_name or "").split())
+    if not name:
+        return
+    row = conn.execute("update users set legal_name = %s where id = %s and legal_name is null returning id",
+                       (name, user_id)).fetchone()
+    if row:
+        audit(conn, None, "user.legal_name_from_bank", "user", user_id, deposit_id=str(deposit_id))
+
+
 def holder_name(conn, user: dict) -> tuple:
     """(name a bank account must be in, where it comes from). Verified ID wins; without KYC, the
     full name the player gave on their profile."""
@@ -112,8 +125,9 @@ def holder_name(conn, user: dict) -> tuple:
     if settings.kyc_required:
         raise ApiError(403, "kyc_required", "verify your ID before adding a bank account")
     if not user.get("legal_name"):
-        raise ApiError(403, "legal_name_required", "add your full name, as on your bank account, first")
-    return user["legal_name"], "CampusXI account"
+        raise ApiError(403, "legal_name_required", "your bank name comes from your first deposit by bank "
+                                                   "transfer: add money first")
+    return user["legal_name"], "bank name on CampusXI"
 
 
 def add_bank_account(conn, user: dict, bank_code: str, account_number: str) -> dict:
