@@ -21,7 +21,8 @@ KICKOFF_GRACE = timedelta(minutes=30)
 
 MATCH_SQL = """
     select m.*, t.sport, t.school_id, t.status as tournament_status, t.name as tournament,
-           h.name as home_team, a.name as away_team, h.colour as home_colour, a.colour as away_colour
+           h.name as home_team, a.name as away_team, h.colour as home_colour, a.colour as away_colour,
+           h.logo_url as home_logo, a.logo_url as away_logo
     from matches m
     join tournaments t on t.id = m.tournament_id
     join teams h on h.id = m.home_team_id

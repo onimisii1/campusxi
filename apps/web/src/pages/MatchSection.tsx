@@ -22,8 +22,8 @@ type Match = {
   id: string
   sport: string
   tournament: string
-  home_team: { id: string; name: string; colour: string | null }
-  away_team: { id: string; name: string; colour: string | null }
+  home_team: { id: string; name: string; colour: string | null; logo?: string | null }
+  away_team: { id: string; name: string; colour: string | null; logo?: string | null }
   scheduled_start: string
   venue: string | null
   status: string
@@ -425,7 +425,8 @@ function ChallengesTab({ match }: { match: Match }) {
               <div className="row gap">
                 {(['home', 'away'] as const).map((s) => (
                   <button key={s} className={`side-btn ${side === s ? 'on' : ''}`} onClick={() => setSide(s)}>
-                    <TeamBadge name={teamName(s)} colour={(s === 'home' ? match.home_team : match.away_team).colour} small />
+                    <TeamBadge name={teamName(s)} colour={(s === 'home' ? match.home_team : match.away_team).colour}
+                      logo={(s === 'home' ? match.home_team : match.away_team).logo} small />
                     <span>{teamName(s)}<small className="block">to win</small></span></button>
                 ))}
               </div>

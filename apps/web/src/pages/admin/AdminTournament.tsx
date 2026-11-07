@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api, ApiError } from '../../api'
 import PageHeader from '../../components/PageHeader'
 import Skeleton from '../../components/Skeleton'
+import TeamBadge from '../../components/TeamBadge'
 import { kickoff } from '../../format'
 import { useSession } from '../../session'
 import { useToast } from '../../toast'
@@ -227,10 +228,40 @@ function MatchLength({ tournamentId, minutes, onDone }: { tournamentId: string; 
   )
 }
 
+type TeamRow = { id: string; name: string; colour: string | null; logo: string | null }
+
+/** Crest and jersey colour: what every card shows for this team. */
+function TeamLook({ t, onDone }: { t: TeamRow; onDone: () => void }) {
+  const { token } = useSession()
+  const toast = useToast()
+  const [logo, setLogo] = useState(t.logo ?? '')
+  const [colour, setColour] = useState(t.colour ?? '')
+  async function save() {
+    try {
+      await api(`/admin/teams/${t.id}`, token, { method: 'PATCH', body: { logo_url: logo.trim(), colour: colour.trim() } })
+      toast(`${t.name}: look saved`)
+      onDone()
+    } catch (e) {
+      toast(errorText(e), 'bad')
+    }
+  }
+  return (
+    <div className="glass-card team-look">
+      <TeamBadge name={t.name} colour={colour || t.colour} logo={logo.startsWith('https://') ? logo : t.logo} />
+      <div className="form-grid">
+        <label>Crest image (https link)<input value={logo} onChange={(e) => setLogo(e.target.value)} placeholder="https://…/crest.png" /></label>
+        <label>Jersey colour<input value={colour} onChange={(e) => setColour(e.target.value)} placeholder="blue or #1565C0" /></label>
+        <button className="primary" onClick={save}>Save {t.name}'s look</button>
+      </div>
+    </div>
+  )
+}
+
 type SquadRow = { id: string; display_name: string; position: string; active: boolean; team: string; has_played: boolean }
 
 function Squads({ tournamentId }: { tournamentId: string }) {
-  const { data, reload } = useApi<{ positions: string[]; athletes: SquadRow[] }>(`/admin/tournaments/${tournamentId}/squads`)
+  const { data, reload } = useApi<{ positions: string[]; athletes: SquadRow[]; teams: TeamRow[] }>(
+    `/admin/tournaments/${tournamentId}/squads`)
   const [team, setTeam] = useState('')
   if (!data) return <Skeleton rows={6} />
   const teams = [...new Set(data.athletes.map((a) => a.team))]
@@ -243,6 +274,7 @@ function Squads({ tournamentId }: { tournamentId: string }) {
           <button key={t} className={`chip ${(team || teams[0]) === t ? 'on' : ''}`} onClick={() => setTeam(t)}>{t}</button>
         ))}
       </div>
+      {data.teams.filter((t) => t.name === (team || teams[0])).map((t) => <TeamLook key={t.id} t={t} onDone={reload} />)}
       <ul className="plain">{shown.map((a) => <SquadEditRow key={a.id} a={a} positions={data.positions} onDone={reload} />)}</ul>
     </div>
   )

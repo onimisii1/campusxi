@@ -81,7 +81,7 @@ def get_tournament(tournament_id: UUID, conn=Depends(get_conn)):
                      (tournament_id,)).fetchone()
     if t is None:
         raise ApiError(404, "tournament_not_found", "tournament not found")
-    t["teams"] = conn.execute("select id, name, colour from teams where tournament_id = %s order by name",
+    t["teams"] = conn.execute("select id, name, colour, logo_url as logo from teams where tournament_id = %s order by name",
                               (tournament_id,)).fetchall()
     return t
 
@@ -164,8 +164,10 @@ def _card(m, now, conn):
     late = late_window(conn, m, now)
     return {
         "id": m["id"], "tournament_id": m["tournament_id"], "tournament": m["tournament"], "sport": m["sport"],
-        "home_team": {"id": m["home_team_id"], "name": m["home_team"], "colour": m["home_colour"]},
-        "away_team": {"id": m["away_team_id"], "name": m["away_team"], "colour": m["away_colour"]},
+        "home_team": {"id": m["home_team_id"], "name": m["home_team"], "colour": m["home_colour"],
+                      "logo": m["home_logo"]},
+        "away_team": {"id": m["away_team_id"], "name": m["away_team"], "colour": m["away_colour"],
+                      "logo": m["away_logo"]},
         "venue": m["venue"], "scheduled_start": m["scheduled_start"], "status": m["status"],
         "lineup_out": m["status"] == "lineup_out", "locked": is_locked(m, now),
         "seconds_to_lock": max(0, seconds),
@@ -273,7 +275,7 @@ def get_match(match_id: UUID, conn=Depends(get_conn), now=Depends(utcnow)):
 def athlete_profile(athlete_id: UUID, conn=Depends(get_conn)):
     """A player's page: team, tournament stats, and fantasy points match by match."""
     a = conn.execute(
-        """select a.id, a.display_name, a.position, t.id as team_id, t.name as team, t.colour,
+        """select a.id, a.display_name, a.position, t.id as team_id, t.name as team, t.colour, t.logo_url,
                   tr.id as tournament_id, tr.name as tournament, tr.sport, tr.status
            from athletes a join teams t on t.id = a.team_id join tournaments tr on tr.id = t.tournament_id
            where a.id = %s""", (athlete_id,)).fetchone()
@@ -299,7 +301,7 @@ def athlete_profile(athlete_id: UUID, conn=Depends(get_conn)):
             "breakdown": [{"label": lbl, "points": pts} for lbl, pts in (sc.breakdown if sc else [])],
             "picked_pct": share})
     return {"id": a["id"], "name": a["display_name"], "position": a["position"],
-            "team": {"id": a["team_id"], "name": a["team"], "colour": a["colour"]},
+            "team": {"id": a["team_id"], "name": a["team"], "colour": a["colour"], "logo": a["logo_url"]},
             "tournament": {"id": a["tournament_id"], "name": a["tournament"], "sport": a["sport"]},
             "stats_kind": stats["kind"], "stats": line, "matches": matches,
             "total_points": sum((x["points"] for x in matches), Decimal(0))}

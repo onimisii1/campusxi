@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ScoreCard, type MatchCardData } from '../components/MatchCard'
 import PageHeader from '../components/PageHeader'
+import TeamBadge from '../components/TeamBadge'
 import Skeleton from '../components/Skeleton'
 import { kickoff, points } from '../format'
 import { sideColours, teamCode } from '../teamStyle'
@@ -8,7 +9,7 @@ import { shareCard, type CardSpec } from '../shareCard'
 import { useToast } from '../toast'
 import { useApi } from '../useApi'
 
-type TeamRef = { id: string; name: string; colour: string | null }
+type TeamRef = { id: string; name: string; colour: string | null; logo?: string | null }
 type Tournament = { id: string; name: string; sport: string; teams: TeamRef[] }
 type Card = MatchCardData & {
   code: string | null; stage: string
@@ -79,7 +80,8 @@ function ShareButton({ spec, filename, icon = false }: { spec: () => CardSpec; f
   return <button className="share-btn" onClick={go}>⤴ Share as image</button>
 }
 
-function TeamChip({ team }: { team: { name: string; colour?: string | null } }) {
+function TeamChip({ team }: { team: { name: string; colour?: string | null; logo?: string | null } }) {
+  if (team.logo) return <span className="team-chip-logo"><TeamBadge name={team.name} logo={team.logo} small />{teamCode(team.name)}</span>
   const { home } = sideColours(team, { name: '' })
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(home.slice(i, i + 2), 16))
   const light = 0.299 * r + 0.587 * g + 0.114 * b > 170     // white or yellow shirts get dark text

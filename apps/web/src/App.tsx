@@ -6,6 +6,7 @@ import AdminTournament from './pages/admin/AdminTournament'
 import ChallengeInvite from './pages/ChallengeInvite'
 import ContestBoard from './pages/ContestBoard'
 import Home from './pages/Home'
+import LiveScore from './pages/LiveScore'
 import MatchHub from './pages/MatchHub'
 import MatchSection, { SECTIONS, type Section } from './pages/MatchSection'
 import MePage from './pages/MePage'
@@ -33,6 +34,7 @@ function Page({ route }: { route: string[] }) {
     case 'table': return <SeasonTable key={a} tournamentId={a} />
     case 'player': return <PlayerPage key={a} athleteId={a} />
     case 'wallet': return a === 'deposit' && b ? <DepositReturn key={b} reference={b} /> : <WalletPage />
+    case 'live': return <LiveScore />
     case 'verify': return <VerifyPage />
     case 'limits': return <LimitsPage />
     case 'refer': return <ReferPage />

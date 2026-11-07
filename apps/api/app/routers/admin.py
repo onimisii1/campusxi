@@ -15,11 +15,11 @@ from app.db import get_conn
 from app.engines.scoring.rules import CURRENT_VERSION, POSITIONS
 from app.errors import ApiError
 from app.competition import bracket
-from app.imports import normalise_position, parse_fixtures, parse_result_stats, parse_results, parse_squads
+from app.imports import LOGO_URL, normalise_position, parse_fixtures, parse_logos, parse_result_stats, parse_results, parse_squads
 from app.live import lineup_entries, stream_scores, tallies
 from app.matches import IN_PLAY_STATUSES, assert_open, kick_off, load_match
 from app.routers.contests import create_free_contest
-from app.schemas import (AthletePatch, ConfirmIn, KnockoutIn, LineupIn, TournamentPatch, PostponeIn, ReopenIn, RolesIn, SchoolIn, ScorersIn, TournamentIn,
+from app.schemas import (AthletePatch, TeamPatch, ConfirmIn, KnockoutIn, LineupIn, TournamentPatch, PostponeIn, ReopenIn, RolesIn, SchoolIn, ScorersIn, TournamentIn,
                          WalkoverIn)
 from app.settlement import settle_free, void_match
 
@@ -107,7 +107,10 @@ def publish_tournament(tournament_id: UUID, user=Depends(require_admin), conn=De
 async def import_squads(tournament_id: UUID, request: Request, user=Depends(require_admin),
                         conn=Depends(get_conn)):
     t = _tournament(conn, user, tournament_id)
-    rows, colours, errors = parse_squads(await _csv_body(request), t["sport"])
+    text = await _csv_body(request)
+    rows, colours, errors = parse_squads(text, t["sport"])
+    logos, logo_errors = parse_logos(text)
+    errors += logo_errors
     if errors:
         raise ApiError(422, "invalid_csv", "fix these rows and upload again; nothing was imported", errors)
     teams = {r["name"].lower(): r["id"] for r in conn.execute(
@@ -130,6 +133,9 @@ async def import_squads(tournament_id: UUID, request: Request, user=Depends(requ
         updated += not res["inserted"]
     for team_key, colour in colours.items():
         conn.execute("update teams set colour = %s where id = %s", (colour, teams[team_key]))
+    for team_key, url in logos.items():
+        if team_key in teams:
+            conn.execute("update teams set logo_url = %s where id = %s", (url, teams[team_key]))
     summary = {"teams_created": new_teams, "athletes_created": new_athletes, "athletes_updated": updated}
     audit(conn, user["id"], "tournament.import_squads", "tournament", t["id"], **summary)
     return summary
@@ -524,7 +530,36 @@ def admin_squads(tournament_id: UUID, user=Depends(require_admin), conn=Depends(
                           where l.athlete_id = a.id and m.status in ('live', 'final_pending', 'confirmed')) as has_played
            from athletes a join teams tm on tm.id = a.team_id where tm.tournament_id = %s
            order by tm.name, a.position, a.display_name""", (t["id"],)).fetchall()
-    return {"sport": t["sport"], "positions": sorted(POSITIONS[t["sport"]]), "athletes": rows}
+    teams = conn.execute("select id, name, colour, logo_url as logo from teams where tournament_id = %s order by name",
+                         (t["id"],)).fetchall()
+    return {"sport": t["sport"], "positions": sorted(POSITIONS[t["sport"]]), "athletes": rows, "teams": teams}
+
+
+@router.patch("/teams/{team_id}")
+def update_team(team_id: UUID, body: TeamPatch, user=Depends(require_admin), conn=Depends(get_conn)):
+    """A team's crest (https image link) and jersey colour, as shown on every card."""
+    team = conn.execute("""select tm.*, tr.school_id from teams tm join tournaments tr on tr.id = tm.tournament_id
+                           where tm.id = %s""", (team_id,)).fetchone()
+    if team is None:
+        raise ApiError(404, "team_not_found", "team not found")
+    _guard_school(user, team["school_id"])
+    changes = {}
+    if body.logo_url is not None:
+        url = body.logo_url.strip()
+        if url and not LOGO_URL.match(url):
+            raise ApiError(422, "bad_logo", "the logo must be an https:// image link")
+        changes["logo_url"] = url or None
+    if body.colour is not None:
+        from app.imports import jersey_hex
+        colour = jersey_hex(body.colour) if body.colour else None
+        if body.colour and colour is None:
+            raise ApiError(422, "bad_colour", "use a colour name like blue, or #RRGGBB")
+        changes["colour"] = colour
+    if changes:
+        sets = ", ".join(f"{k} = %s" for k in changes)
+        conn.execute(f"update teams set {sets} where id = %s", (*changes.values(), team_id))  # noqa: S608
+        audit(conn, user["id"], "team.update", "team", team_id, **changes)
+    return conn.execute("select id, name, colour, logo_url as logo from teams where id = %s", (team_id,)).fetchone()
 
 
 @router.patch("/athletes/{athlete_id}")

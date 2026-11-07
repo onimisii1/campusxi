@@ -186,3 +186,21 @@ def test_admin_audits_squads_and_match_length(sw, client, db):
     assert db.execute("select scheduled_minutes from matches where id = %s", (mid,)).fetchone()["scheduled_minutes"] == 90
     other = make_user(db, make_school(db, "Elsewhere"), roles=("player", "admin"))
     assert client.patch(f"/admin/athletes/{gk}", headers=auth(other), json={"active": False}).status_code == 403
+
+
+def test_team_logos_from_csv_and_admin(client, db):
+    t, admin = _tournament(client, db, squads=(
+        "team,athlete,position,jersey,logo\n"
+        "CPE,Alamin,GK,blue,https://example.org/cpe.png\nCPE,AB,DEF,,\nPGE,Kolo,MID,green,\n"))
+    teams = {r["name"]: r for r in client.get(f"/admin/tournaments/{t['id']}/squads", headers=auth(admin)).json()["teams"]}
+    assert teams["CPE"]["logo"] == "https://example.org/cpe.png" and teams["PGE"]["logo"] is None
+    res = client.patch(f"/admin/teams/{teams['PGE']['id']}", headers=auth(admin),
+                       json={"logo_url": "https://example.org/pge.svg", "colour": "maroon"})
+    assert (res.json()["logo"], res.json()["colour"]) == ("https://example.org/pge.svg", "#7B1F2B")
+    assert client.patch(f"/admin/teams/{teams['PGE']['id']}", headers=auth(admin),
+                        json={"logo_url": "http://insecure.example/x.png"}).json()["error"]["code"] == "bad_logo"
+    assert client.patch(f"/admin/teams/{teams['PGE']['id']}", headers=auth(admin),
+                        json={"logo_url": ""}).json()["logo"] is None
+    bad = client.post(f"/admin/tournaments/{t['id']}/squads", headers=auth(admin),
+                      content="team,athlete,position,logo\nEEE,Ovie,GK,ftp://nope\n")
+    assert bad.json()["error"]["code"] == "invalid_csv"

@@ -228,3 +228,22 @@ def parse_result_stats(text: str, sport: str) -> tuple:
             continue
         out.append((line, (r["code"], r["team"], r["athlete"], counts)))
     return out, errors
+
+
+LOGO_URL = re.compile(r"^https://\S{4,490}$")
+
+
+def parse_logos(text: str) -> tuple:
+    """Optional `logo` column in squads.csv: an https image URL, once per team.
+    Returns ({team_lower: url}, errors)."""
+    rows, errors = _read(text, ("team",))
+    logos = {}
+    for line, r in rows:
+        url = r.get("logo", "")
+        if not url:
+            continue
+        if not LOGO_URL.match(url):
+            errors.append({"row": line, "message": "logo must be an https:// image link"})
+        elif logos.setdefault(r["team"].lower(), url) != url:
+            errors.append({"row": line, "message": f"{r['team']} is given two different logos"})
+    return logos, errors

@@ -1,5 +1,5 @@
-import MatchCard, { type MatchCardData } from '../components/MatchCard'
-import PageHeader from '../components/PageHeader'
+import MatchCard, { statusPill, type MatchCardData } from '../components/MatchCard'
+import { sideColours } from '../teamStyle'
 import TeamBadge from '../components/TeamBadge'
 import Skeleton from '../components/Skeleton'
 import { useApi } from '../useApi'
@@ -15,7 +15,7 @@ export default function MatchHub({ matchId }: { matchId: string }) {
 
   return (
     <section>
-      <PageHeader title={m.status === 'live' ? 'Live Score' : 'Match'} back="#/" />
+      <MatchHero m={m} />
       <MatchCard match={m} />
       <div className="section-head"><h3>{lineupOut ? 'Line-ups' : 'Squads'}</h3>
         <a href={`#/match/${m.id}/live`}>{m.locked ? 'Live points' : ''}</a></div>
@@ -24,7 +24,7 @@ export default function MatchHub({ matchId }: { matchId: string }) {
           const team = side === 'home' ? m.home_team : m.away_team
           return (
             <div key={side} className="lineup-card">
-              <div className="lineup-head"><TeamBadge name={team.name} colour={team.colour} small /><strong>{team.name}</strong></div>
+              <div className="lineup-head"><TeamBadge name={team.name} colour={team.colour} logo={team.logo} small /><strong>{team.name}</strong></div>
               <ul className="plain">
                 {m.squads[side]
                   .filter((a) => !lineupOut || a.lineup)
@@ -42,5 +42,33 @@ export default function MatchHub({ matchId }: { matchId: string }) {
         })}
       </div>
     </section>
+  )
+}
+
+/** Design screen 3's top: a full-width stage with back, the lime Live pill and close. Without a match
+ *  photo the stage is drawn from the two teams' colours and crests. */
+function MatchHero({ m }: { m: Detail }) {
+  const colours = sideColours(m.home_team, m.away_team)
+  const live = m.status === 'live'
+  return (
+    <div className="match-hero" style={{ ['--home' as string]: colours.home, ['--away' as string]: colours.away }}>
+      <div className="hero-bar">
+        <a className="round-btn glassy" href="#/" aria-label="Back">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor"
+            strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </a>
+        {live
+          ? <span className="live-pill"><i className="live-icon">▶</i>Live</span>
+          : <span className="live-pill idle">{statusPill(m).text}</span>}
+        <a className="round-btn glassy" href="#/" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden><path d="M6 6l12 12M18 6L6 18" stroke="currentColor"
+            strokeWidth="2.2" strokeLinecap="round" /></svg>
+        </a>
+      </div>
+      <div className="hero-crests" aria-hidden>
+        <TeamBadge name={m.home_team.name} colour={m.home_team.colour} logo={m.home_team.logo} />
+        <TeamBadge name={m.away_team.name} colour={m.away_team.colour} logo={m.away_team.logo} />
+      </div>
+    </div>
   )
 }

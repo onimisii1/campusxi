@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { countdown, deadline, points } from '../format'
 import { LIVE_REFRESH_MS, useApi } from '../useApi'
 import TeamBadge from './TeamBadge'
@@ -8,8 +9,8 @@ export type MatchCardData = {
   tournament_id: string
   tournament: string
   sport: string
-  home_team: { id: string; name: string; colour?: string | null }
-  away_team: { id: string; name: string; colour?: string | null }
+  home_team: { id: string; name: string; colour?: string | null; logo?: string | null }
+  away_team: { id: string; name: string; colour?: string | null; logo?: string | null }
   venue: string | null
   scheduled_start: string
   status: string
@@ -21,6 +22,7 @@ export type MatchCardData = {
   stage?: string
   score?: { home: number; away: number; walkover: boolean; final: boolean } | null
   minute?: number | null
+  kicked_off_at?: string | null
   scheduled_minutes?: number
   fans?: number
   fans_preview?: string[]
@@ -70,9 +72,9 @@ export function EventCard({ m, lime = false, stacked = false }: { m: MatchCardDa
         <span className={`status-pill ${pill.cls}`}>{pill.text}</span>
       </span>
       <span className="faceoff">
-        <span className="side"><TeamBadge name={m.home_team.name} colour={m.home_team.colour} />{m.home_team.name}</span>
+        <span className="side"><TeamBadge name={m.home_team.name} colour={m.home_team.colour} logo={m.home_team.logo} />{m.home_team.name}</span>
         <span className="mid"><small>{label(m)}</small><b>{centre(m)}</b><small className="phase">{phase(m)}</small></span>
-        <span className="side"><TeamBadge name={m.away_team.name} colour={m.away_team.colour} />{m.away_team.name}</span>
+        <span className="side"><TeamBadge name={m.away_team.name} colour={m.away_team.colour} logo={m.away_team.logo} />{m.away_team.name}</span>
       </span>
     </a>
   )
@@ -100,20 +102,54 @@ export function FansRow({ m }: { m: MatchCardData }) {
 /** Fixtures card (design screen 2): names over big scores, a centre pill with the clock, the fans row. */
 export function ScoreCard({ m }: { m: MatchCardData }) {
   const live = m.status === 'live'
-  const mid = m.score?.walkover ? 'W/O' : live && m.minute != null ? `${m.minute}'`
-    : m.score?.final ? 'FT' : new Date(m.scheduled_start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  const top = m.score?.walkover ? 'W/O' : live && m.minute != null
+    ? (m.scheduled_minutes && m.minute >= m.scheduled_minutes / 2 ? '2ND' : '1ST')
+    : m.score?.final ? 'FT' : (m.code ?? new Date(m.scheduled_start).toLocaleDateString(undefined, { weekday: 'short' }))
+  const bottom = live && m.minute != null ? `${String(m.minute).padStart(2, '0')}:00`
+    : m.score?.final || m.score?.walkover ? (m.code ?? '') : new Date(m.scheduled_start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  const score = (n?: number) => (m.score && !m.score.walkover ? n : '–')
   return (
     <a className="score-card" href={`#/match/${m.id}`}>
       <span className="score-grid">
-        <TeamBadge name={m.home_team.name} colour={m.home_team.colour} small />
-        <span className="score-side"><small>{m.home_team.name}</small><b className={m.score && !m.score.walkover ? '' : 'empty'}>{m.score && !m.score.walkover ? m.score.home : '–'}</b></span>
-        <span className="score-mid">{live && <i className="live-dot" aria-label="live" />}<small>{m.code ?? ''}</small><span>{mid}</span></span>
-        <span className="score-side right"><small>{m.away_team.name}</small><b className={m.score && !m.score.walkover ? '' : 'empty'}>{m.score && !m.score.walkover ? m.score.away : '–'}</b></span>
-        <TeamBadge name={m.away_team.name} colour={m.away_team.colour} small />
+        <TeamBadge name={m.home_team.name} colour={m.home_team.colour} logo={m.home_team.logo} small />
+        <span className="score-side"><small>{m.home_team.name}</small><b className={m.score && !m.score.walkover ? '' : 'empty'}>{score(m.score?.home)}</b></span>
+        <span className="score-centre">
+          {live ? <i className="live-icon" aria-label="live">LIVE</i> : <i className="live-icon off" aria-hidden />}
+          <span className="score-mid"><small>{top}</small><span>{bottom}</span></span>
+        </span>
+        <span className="score-side right"><small>{m.away_team.name}</small><b className={m.score && !m.score.walkover ? '' : 'empty'}>{score(m.score?.away)}</b></span>
+        <TeamBadge name={m.away_team.name} colour={m.away_team.colour} logo={m.away_team.logo} small />
       </span>
       {(m.fans || !m.locked) ? <FansRow m={m} /> : null}
     </a>
   )
+}
+
+function hms(sec: number): string {
+  const s = Math.max(0, Math.floor(sec))
+  return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((n) => String(n).padStart(2, '0')).join(':')
+}
+
+/** The design's running "00:43:43" clock: time since kick-off while live, a countdown before it. */
+function useClock(m: MatchCardData): { text: string; elapsed: number | null } {
+  const [now, setNow] = useState(() => Date.now())
+  const ticking = m.status === 'live' || (!m.locked && m.seconds_to_lock < 86_400)
+  useEffect(() => {
+    if (!ticking) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [ticking])
+  if (m.status === 'live') {
+    const start = new Date(m.kicked_off_at ?? m.scheduled_start).getTime()
+    const elapsed = Math.max((now - start) / 1000, (m.minute ?? 0) * 60)
+    return { text: hms(elapsed), elapsed }
+  }
+  if (m.score?.final || m.status === 'final_pending') return { text: phase(m), elapsed: null }
+  if (!m.locked) {
+    const left = (new Date(m.scheduled_start).getTime() - now) / 1000
+    return { text: left < 86_400 ? `Kick-off in ${hms(left)}` : countdown(m.seconds_to_lock), elapsed: null }
+  }
+  return { text: phase(m), elapsed: null }
 }
 
 /** The match page's scoreboard (design screen 3's live panel): league, crests with scores, the clock with
@@ -124,27 +160,28 @@ export default function MatchCard({ match }: { match: MatchCardData }) {
   const base = `#/match/${match.id}`
   const started = s?.average !== null && s?.average !== undefined
   const total = match.scheduled_minutes || 0
-  const progress = total && match.minute != null ? Math.min(100, (match.minute / total) * 100)
-    : match.score?.final ? 100 : 0
+  const clock = useClock(match)
+  const progress = match.score?.final || match.status === 'final_pending' ? 100
+    : total && clock.elapsed != null ? Math.min(100, (clock.elapsed / 60 / total) * 100) : 0
 
   return (
-    <article className="panel" aria-label={`${match.home_team.name} vs ${match.away_team.name}`}>
+    <article className="panel sheet-panel" aria-label={`${match.home_team.name} vs ${match.away_team.name}`}>
+      <span className="sheet-handle" aria-hidden />
       <a className="panel-league" href={`#/tournament/${match.tournament_id}`}>
         <span className="league-logo" aria-hidden>{match.sport === 'basketball' ? '🏀' : match.sport === 'volleyball' ? '🏐' : '⚽'}</span>
         <span><strong>{match.tournament}</strong><small className="muted block">{label(match)}{match.venue ? ` · ${match.venue}` : ''}</small></span>
       </a>
       <div className="panel-teams">
-        <span className="panel-team"><TeamBadge name={match.home_team.name} colour={match.home_team.colour} />
+        <span className="panel-team"><TeamBadge name={match.home_team.name} colour={match.home_team.colour} logo={match.home_team.logo} />
           {match.score && !match.score.walkover && <b className="score-bubble">{match.score.home}</b>}
           <span>{match.home_team.name}</span></span>
         <span className="vs">VS</span>
-        <span className="panel-team"><TeamBadge name={match.away_team.name} colour={match.away_team.colour} />
+        <span className="panel-team"><TeamBadge name={match.away_team.name} colour={match.away_team.colour} logo={match.away_team.logo} />
           {match.score && !match.score.walkover && <b className="score-bubble">{match.score.away}</b>}
           <span>{match.away_team.name}</span></span>
       </div>
       <div className="clock">
-        <span className="clock-time">{match.status === 'live' && match.minute != null ? `${String(match.minute).padStart(2, '0')}:00`
-          : match.locked ? phase(match) : countdown(match.seconds_to_lock)}</span>
+        <span className="clock-time">{clock.text}</span>
         {total > 0 && <span className="clock-total muted small">{total}′</span>}
       </div>
       <div className="track" aria-hidden><span style={{ width: `${progress}%` }} /><i style={{ left: `${progress}%` }} /></div>

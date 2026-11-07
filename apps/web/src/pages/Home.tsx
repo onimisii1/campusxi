@@ -29,7 +29,7 @@ export default function Home() {
   return (
     <section>
       <Greeting />
-      <h1 className="headline">Choose your<br /><b>Favourite game</b></h1>
+      <h1 className="headline">Choose your<br /><b>Favorite game</b></h1>
       <SportSlider value={sport} onChange={setSport} />
       {error && <p className="error">{error}</p>}
       {!data && !error && <Skeleton hero rows={2} />}
@@ -38,7 +38,7 @@ export default function Home() {
       {top && (
         <>
           <div className="section-head"><h3>Top Events</h3>
-            <a href={`#/tournament/${top.tournament_id}`}>View All</a></div>
+            <a href="#/live">View All</a></div>
           <div className={`event-stack ${upcoming[0] ? 'joined' : ''}`}>
             <EventCard m={top} lime />
             {upcoming[0] && <EventCard m={upcoming[0]} stacked />}

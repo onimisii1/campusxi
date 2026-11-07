@@ -53,9 +53,9 @@ def _results(conn, tournament_id, stage="league"):
 
 def standings(conn, tournament: dict) -> list:
     pts = LEAGUE_POINTS.get(tournament["sport"], DEFAULT_POINTS)
-    teams = conn.execute("select id, name, colour from teams where tournament_id = %s",
+    teams = conn.execute("select id, name, colour, logo_url from teams where tournament_id = %s",
                          (tournament["id"],)).fetchall()
-    rows = {t["id"]: {"team": {"id": t["id"], "name": t["name"], "colour": t["colour"]},
+    rows = {t["id"]: {"team": {"id": t["id"], "name": t["name"], "colour": t["colour"], "logo": t["logo_url"]},
                       "played": 0, "won": 0, "drawn": 0, "lost": 0, "for": 0, "against": 0,
                       "points": 0, "form": []} for t in teams}
     for r in _results(conn, tournament["id"]):
@@ -129,14 +129,15 @@ def player_stats(conn, tournament: dict) -> dict:
             totals[athlete][etype] += amount
     apps = _appearances(conn, [r["id"] for r in played])
     athletes = {str(a["id"]): a for a in conn.execute(
-        """select a.id, a.display_name, a.position, t.id as team_id, t.name as team, t.colour
+        """select a.id, a.display_name, a.position, t.id as team_id, t.name as team, t.colour, t.logo_url
            from athletes a join teams t on t.id = a.team_id where t.tournament_id = %s""",
         (tournament["id"],)).fetchall()}
 
     def person(aid):
         a = athletes[aid]
         return {"athlete_id": aid, "name": a["display_name"], "position": a["position"],
-                "team": {"id": a["team_id"], "name": a["team"], "colour": a["colour"]}, "matches": apps[aid]}
+                "team": {"id": a["team_id"], "name": a["team"], "colour": a["colour"], "logo": a["logo_url"]},
+                "matches": apps[aid]}
 
     if tournament["sport"] == BASKETBALL:
         rows = []
