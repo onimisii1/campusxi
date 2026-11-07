@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ComingSoon from '../components/ComingSoon'
 import { ScoreCard, type MatchCardData } from '../components/MatchCard'
 import PageHeader from '../components/PageHeader'
 import TeamBadge from '../components/TeamBadge'
@@ -193,7 +194,13 @@ function LeagueTable({ tournamentId, sport, name }: { tournamentId: string; spor
 function PlayerStats({ tournamentId, name }: { tournamentId: string; name: string }) {
   const { data } = useApi<Stats>(`/tournaments/${tournamentId}/stats`, 60_000)
   if (!data) return <Skeleton rows={5} />
-  if (data.players.length === 0) return <p className="muted">No stats yet: they appear once results are confirmed.</p>
+  if (data.players.length === 0) {
+    return (
+      <ComingSoon icon={data.kind === 'mvp' ? '🏀' : '⚽'} title={data.kind === 'mvp' ? 'MVP race' : 'Golden boot'}>
+        The leaders appear here once the first results with scorers are confirmed.
+      </ComingSoon>
+    )
+  }
   const mvp = data.kind === 'mvp'
   const spec = (): CardSpec => ({
     title: mvp ? 'Basketball MVP' : 'Golden boot', kicker: name, badge: `Top ${Math.min(10, data.players.length)}`,
@@ -257,6 +264,11 @@ function BracketView({ tournamentId, colours }: { tournamentId: string; colours:
   )
   return (
     <div className="bracket">
+      {data.semis.every((s) => s.placeholder) && (
+        <ComingSoon icon="🏆" title="Knockouts">
+          The semi-finals are set when the league stage ends. Below is how it would look if it ended now.
+        </ComingSoon>
+      )}
       <div><h3>Semi-finals</h3>{data.semis.map((s, i) => <div key={i}>{tie(s, `SF${i + 1}`)}</div>)}</div>
       <div><h3>Final</h3>{tie(data.final, 'Final')}{data.third_place && <>{tie(data.third_place, '3rd place')}</>}</div>
     </div>

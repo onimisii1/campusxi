@@ -1,6 +1,8 @@
 import type { MyBet } from '../components/MyBetRow'
 import { useState } from 'react'
 import Avatar from '../components/Avatar'
+import { SoonBadge } from '../components/ComingSoon'
+import { useWallet } from '../money'
 import PageHeader from '../components/PageHeader'
 import { AVATAR, pickPhoto, resize, uploadImage } from '../media'
 import { useToast } from '../toast'
@@ -17,6 +19,7 @@ export default function MePage() {
   const [busy, setBusy] = useState(false)
   const { data: schools } = useApi<School[]>(status === 'ready' ? '/schools' : null)
   const { data: bets } = useApi<MyBet[]>(status === 'ready' ? '/me/bets' : null)
+  const { data: w } = useWallet()
 
   if (status === 'loading') return null
   if (status !== 'ready' || !me) {
@@ -68,7 +71,8 @@ export default function MePage() {
         <li><a href="#/wallet">Wallet <span aria-hidden>→</span></a></li>
         <li><a href="#/challenges">My challenges <span aria-hidden>→</span></a></li>
         <li><a href="#/refer">Invite friends, earn coins <span aria-hidden>→</span></a></li>
-        <li><a href="#/verify">Verify ID <span aria-hidden>→</span></a></li>
+        <li><a href="#/notifications">Notifications <span aria-hidden>→</span></a></li>
+        <li><a href="#/verify">Verify ID{!w?.kyc_required && <SoonBadge />} <span aria-hidden>→</span></a></li>
         <li><a href="#/limits">Limits and breaks <span aria-hidden>→</span></a></li>
         <li><a href="#/account">Account and security <span aria-hidden>→</span></a></li>
         {me.roles.includes('scorer') && <li><a href="#/scorer">Scorer app <span aria-hidden>→</span></a></li>}

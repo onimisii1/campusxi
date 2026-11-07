@@ -3,6 +3,7 @@ import { EventCard, ScoreCard, type MatchCardData } from '../components/MatchCar
 import Skeleton from '../components/Skeleton'
 import SportSlider, { savedSport } from '../components/SportSlider'
 import Avatar from '../components/Avatar'
+import ComingSoon from '../components/ComingSoon'
 import type { Inbox } from './NotificationsPage'
 import { naira, useWallet } from '../money'
 import { useSession } from '../session'
@@ -34,7 +35,12 @@ export default function Home() {
       <SportSlider value={sport} onChange={setSport} />
       {error && <p className="error">{error}</p>}
       {!data && !error && <Skeleton hero rows={2} />}
-      {data && !top && <p className="card muted">No {sport} events yet. Check back soon.</p>}
+      {data && !top && (
+        <ComingSoon icon={sport === 'volleyball' ? '🏐' : sport === 'basketball' ? '🏀' : '⚽'}
+          title={`${sport[0].toUpperCase()}${sport.slice(1)} is coming`}>
+          Fixtures, fantasy teams and contests appear here once the organisers add the {sport} tournament.
+        </ComingSoon>
+      )}
 
       {top && (
         <>

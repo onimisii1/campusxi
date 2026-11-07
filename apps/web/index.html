@@ -8,12 +8,15 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#000000" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <!-- black-translucent: white clock/battery over our black page (plain "black" shows dark text
+         on newer iPhones, which vanishes on a black app); the page pads itself below the bar -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="color-scheme" content="dark" />
     <meta name="apple-mobile-web-app-title" content="CampusXI" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,300;1,600;1,700&display=swap" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>CampusXI</title>
   </head>
   <body>

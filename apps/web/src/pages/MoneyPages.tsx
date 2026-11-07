@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import ComingSoon from '../components/ComingSoon'
 import PageHeader from '../components/PageHeader'
 import Skeleton from '../components/Skeleton'
 import { naira, rememberReferral, useWallet } from '../money'
@@ -18,6 +19,16 @@ export function VerifyPage() {
   const [busy, setBusy] = useState(false)
   const [reason, setReason] = useState<string | null>(null)
   if (!w) return <Skeleton rows={3} />
+  if (!w.kyc_required && w.kyc_status !== 'verified') {
+    return (
+      <section>
+        <PageHeader title="Verify your ID" back="#/me" />
+        <ComingSoon icon="🪪" title="ID verification (NIN / BVN)">
+          Not needed to play right now: tick 18+ in your wallet, and your bank name comes from your first deposit.
+        </ComingSoon>
+      </section>
+    )
+  }
 
   async function go() {
     setBusy(true)

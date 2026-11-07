@@ -5332,3 +5332,210 @@ label.field-label {
 .onboarding > .link {
   align-self: flex-start;
 }
+
+/* ---------- phone safe areas (status bar on top, home bar below; viewport-fit=cover) ---------- */
+.shell {
+  padding-top: calc(18px + env(safe-area-inset-top));
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+}
+
+.match-hero {
+  margin-top: calc(-18px - env(safe-area-inset-top));
+}
+
+.match-hero .hero-bar {
+  padding-top: calc(18px + env(safe-area-inset-top));
+}
+
+.save-bar,
+.sheet {
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+}
+
+/* =====================================================================
+   Size + glass pass (Nov 2026, Daniel): smaller controls that fit a 360px phone, text that never
+   spills out of a button, rows that keep their gaps, and glassier icons.
+   ===================================================================== */
+button,
+.primary,
+.chip,
+.tab,
+.pill-btn,
+.join-btn,
+.sheet-btn,
+.ghost-btn,
+.action-pill {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primary,
+a.primary.as-button {
+  min-height: 46px;
+  padding: 0 20px;
+  font-size: 0.95rem;
+}
+
+.primary.narrow,
+.join-btn {
+  min-height: 38px;
+  padding: 0 16px;
+  font-size: 0.88rem;
+}
+
+.chip,
+.tab,
+.chip-row .chip {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 0.86rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs .tab {
+  flex: 1 0 auto;
+}
+
+.sheet-btn,
+.ghost-btn,
+.action-pill,
+.share-btn {
+  min-height: 36px;
+  font-size: 0.9rem;
+}
+
+/* rows of buttons never touch */
+.row.gap,
+.chip-row,
+.action-row,
+.link-pair,
+.text-actions {
+  gap: 8px;
+}
+
+.chip-row {
+  flex-wrap: wrap;
+}
+
+/* match card: Pick team sizes to its words; Contests · Challenges wrap below if there's no room */
+.panel .actions {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  align-items: center;
+}
+
+.panel .actions .primary {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 0 20px;
+}
+
+.panel .actions .action-row {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+/* sport pills: a little smaller */
+.seg {
+  min-height: 46px;
+}
+
+/* glass icons: every round icon button, the sport balls, the wallet chip, notification icons */
+.round-btn,
+.round-btn.square,
+.balance-chip,
+.seg .ball,
+.notif-icon,
+.pos-tag {
+  background: rgb(255 255 255 / 7%);
+  border: 1px solid rgb(255 255 255 / 13%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%), inset 0 -1px 0 rgb(0 0 0 / 30%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+}
+
+.round-btn {
+  width: 42px;
+  height: 42px;
+}
+
+.round-btn svg {
+  opacity: 0.92;
+}
+
+/* cards: a touch more glass (lighter fill, brighter top edge) */
+.card,
+.glass-card,
+.row-card,
+.contest-card,
+.event-card:not(.lime),
+.score-card,
+.panel,
+.lineup-card,
+.menu-list,
+.swipe-promo,
+table.board,
+.pick-row,
+.dept-stats span {
+  background: rgb(255 255 255 / 5.5%);
+  border-color: rgb(255 255 255 / 11%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%), 0 12px 30px rgb(0 0 0 / 35%);
+}
+
+/* the builder's save bar sits over the player list: solid enough that nothing shows through */
+.save-bar {
+  background: rgb(0 0 0 / 96%);
+}
+
+/* ---------- coming soon ---------- */
+.soon {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px dashed rgb(255 255 255 / 18%);
+  background: rgb(255 255 255 / 3%);
+}
+
+.soon-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 7%);
+  border: 1px solid rgb(255 255 255 / 13%);
+  font-size: 1.2rem;
+  filter: grayscale(1);
+}
+
+.soon-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(205 245 74 / 14%);
+  color: var(--lime);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}

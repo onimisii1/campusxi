@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import ComingSoon from '../components/ComingSoon'
 import ContestCard from '../components/ContestCard'
 import JoinContestSheet from '../components/JoinContestSheet'
 import MyBetRow, { type MyBet } from '../components/MyBetRow'
@@ -157,6 +158,11 @@ function ContestsTab({ match }: { match: Match }) {
               {list.map((c) => <ContestCard key={c.id} contest={c} matchId={match.id} teams={teams} onChanged={reload} />)}
             </div>
           ))}
+          {view === 'all' && !contests.some((c) => c.entry_fee_kobo > 0) && (
+            <ComingSoon icon="🏆" title="Cash contests">
+              Mega contests from ₦1,000 and ₦400 Minis, with real prizes. Free contests are open now.
+            </ComingSoon>
+          )}
         </>
       )}
     </div>
@@ -428,6 +434,11 @@ function ChallengesTab({ match }: { match: Match }) {
         ))}
       </ul>
 
+      {!resultBets && (
+        <ComingSoon icon="🎯" title="Who wins? Home / Away bets">
+          Back {match.home_team.name} or {match.away_team.name} against other fans. Head-to-head team challenges are open now.
+        </ComingSoon>
+      )}
       {resultBets && (
         <>
           <h3>Who wins? (Home / Away bets)</h3>
