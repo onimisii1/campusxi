@@ -36,7 +36,7 @@ class Paystack:
 
     def verify(self, reference: str) -> Payment:
         data = self._call("GET", f"/transaction/verify/{reference}")
-        status = {"success": "success", "failed": "failed", "abandoned": "failed", "reversed": "failed"}.get(
+        status = {"success": "success", "failed": "failed", "abandoned": "failed", "reversed": "reversed"}.get(
             data.get("status"), "pending")
         auth = data.get("authorization") or {}       # Pay with Transfer: sender_name / sender_bank / sender_bank_account_number
         return Payment(status, int(data.get("amount") or 0), data.get("channel"), int(data.get("fees") or 0),
@@ -49,6 +49,14 @@ class Paystack:
             raise PermissionError("bad paystack signature")
         body = json.loads(raw)
         event, data = body.get("event", ""), body.get("data") or {}
+        txn = data.get("transaction") if isinstance(data.get("transaction"), dict) else {}
+        if event.startswith("refund."):            # money taken back after a successful charge
+            ref = data.get("transaction_reference") or txn.get("reference")
+            status = {"refund.processed": "reversed"}.get(event)
+            return WebhookEvent(f"{event}:{data.get('id') or ref}", "refund" if status else "other", ref, status)
+        if event.startswith("charge.dispute."):    # a chargeback opened (or moved) on a successful charge
+            ref = txn.get("reference") or data.get("transaction_reference")
+            return WebhookEvent(f"{event}:{data.get('id') or ref}", "dispute", ref, event.rsplit(".", 1)[-1])
         kind = "charge" if event.startswith("charge.") else "transfer" if event.startswith("transfer.") else "other"
         status = {"charge.success": "success", "transfer.success": "success", "transfer.failed": "failed",
                   "transfer.reversed": "reversed"}.get(event)

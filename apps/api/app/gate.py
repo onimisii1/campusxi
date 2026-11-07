@@ -76,7 +76,14 @@ def identity_ok(user: dict) -> bool:
     return user.get("adult_confirmed_at") is not None
 
 
+def require_not_frozen(user: dict) -> None:
+    """A reversed deposit or an open chargeback pauses all cash play until an admin clears it."""
+    if user.get("money_frozen_at"):
+        raise ApiError(403, "money_frozen", f"cash play is paused: {user.get('money_frozen_reason') or 'contact support'}")
+
+
 def require_identity(user: dict, doing: str) -> None:
+    require_not_frozen(user)
     if identity_ok(user):
         return
     if settings.kyc_required:

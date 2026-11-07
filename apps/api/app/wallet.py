@@ -17,6 +17,7 @@ from app.errors import ApiError
 CASH, BONUS, HELD_CASH, HELD_BONUS = "cash", "bonus", "held_cash", "held_bonus"
 PLATFORM_FEE = "platform:fee"
 BONUS_POOL = "platform:bonus_pool"
+REVERSAL_LOSS = "platform:reversal_loss"     # reversed deposits the player had already spent or withdrawn
 
 
 def acct(user_id, kind: str) -> str:

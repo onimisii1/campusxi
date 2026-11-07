@@ -63,7 +63,8 @@ def settle_deposit(conn, reference: str, now) -> dict:
         audit(conn, None, "deposit.credit", "deposit", d["id"], amount_kobo=d["amount_kobo"])
         name_from_bank(conn, d["user_id"], d["payer_name"], d["id"])
         maybe_reward(conn, d["user_id"], now)
-    elif payment.status == "failed" or (payment.status == "success" and payment.amount_kobo != d["amount_kobo"]):
+    elif payment.status in ("failed", "reversed") or (payment.status == "success"
+                                                      and payment.amount_kobo != d["amount_kobo"]):
         d = conn.execute("update deposits set status = 'failed', updated_at = %s where id = %s returning *",
                          (now, d["id"])).fetchone()
         audit(conn, None, "deposit.fail", "deposit", d["id"], provider_amount=payment.amount_kobo)
@@ -158,6 +159,8 @@ def add_bank_account(conn, user: dict, bank_code: str, account_number: str) -> d
 
 
 def request_withdrawal(conn, user: dict, amount: int, bank_account_id, now) -> dict:
+    from app.gate import require_not_frozen
+    require_not_frozen(user)
     if settings.kyc_required and user["kyc_status"] != "verified":
         raise ApiError(403, "kyc_required", "verify your ID first")
     if amount < settings.min_withdrawal_kobo:
@@ -226,6 +229,85 @@ def finish_withdrawal(conn, w: dict, outcome: str, now, reason: str | None = Non
     return w
 
 
+def _admins_for(conn, user_id) -> list:
+    """Admins of the player's school, and every superadmin."""
+    return [r["id"] for r in conn.execute(
+        """select a.id from users a, users p where p.id = %s and a.deleted_at is null
+           and ('superadmin' = any(a.roles) or ('admin' = any(a.roles) and a.school_id = p.school_id))""",
+        (user_id,)).fetchall()]
+
+
+def freeze(conn, user_id, reason: str, now) -> None:
+    conn.execute("update users set money_frozen_at = coalesce(money_frozen_at, %s), money_frozen_reason = %s "
+                 "where id = %s", (now, reason, user_id))
+    audit(conn, None, "user.money_frozen", "user", user_id, reason=reason)
+
+
+def reverse_deposit(conn, d: dict, reason: str, now) -> dict:
+    """The provider took a credited deposit back (refund or lost chargeback). Take it back out of the
+    player's cash; whatever they've already spent or withdrawn is booked to platform:reversal_loss,
+    their cash play is frozen, and admins are told."""
+    if d["status"] != "success":
+        return d
+    wallet.lock_user(conn, d["user_id"])
+    have = wallet.balances(conn, d["user_id"])[wallet.CASH]
+    take = min(max(have, 0), d["amount_kobo"])
+    short = d["amount_kobo"] - take
+    lines = [(wallet.psp(d["provider"]), d["amount_kobo"], "deposit_reversal")]
+    if take:
+        lines.append((wallet.acct(d["user_id"], wallet.CASH), -take, "deposit_reversal"))
+    if short:
+        lines.append((wallet.REVERSAL_LOSS, -short, "deposit_reversal"))
+    wallet.post(conn, lines, "deposit", d["id"])
+    d = conn.execute("""update deposits set status = 'reversed', reversed_at = %s, reversal_reason = %s,
+                        shortfall_kobo = %s, updated_at = %s where id = %s returning *""",
+                     (now, reason, short, now, d["id"])).fetchone()
+    audit(conn, None, "deposit.reverse", "deposit", d["id"], amount_kobo=d["amount_kobo"], taken_back_kobo=take,
+          shortfall_kobo=short, reason=reason)
+    naira = f"₦{d['amount_kobo'] / 100:,.0f}"
+    player = conn.execute("select team_name from users where id = %s", (d["user_id"],)).fetchone()["team_name"]
+    if short:
+        freeze(conn, d["user_id"], f"a {naira} deposit was reversed by the bank after it was used", now)
+    from app.notify import notify
+    notify(conn, [d["user_id"]], "deposit_reversed", d["id"], f"Your {naira} deposit was reversed",
+           "Your bank took the payment back, so it's been removed from your wallet."
+           + (" Cash play is paused until this is sorted: contact support." if short else ""), "#/wallet", now)
+    notify(conn, _admins_for(conn, d["user_id"]), "admin_alert", f"reversal:{d['id']}",
+           f"Deposit reversed: {player}, {naira}",
+           f"{reason}. Taken back from wallet: ₦{take / 100:,.0f}."
+           + (f" Already spent: ₦{short / 100:,.0f} (account frozen)." if short else ""), "#/admin/finance", now)
+    return d
+
+
+def check_reversal(conn, reference: str, now) -> dict | None:
+    """A refund webhook: confirm with the provider (never the webhook body alone) before taking money back."""
+    d = conn.execute("select * from deposits where psp_reference = %s for update", (reference,)).fetchone()
+    if d is None or d["status"] != "success":
+        return d
+    try:
+        payment = get(d["provider"]).verify(reference)
+    except ProviderError:
+        return d
+    if payment.status == "reversed":
+        return reverse_deposit(conn, d, "refunded by the payment provider", now)
+    return d
+
+
+def dispute_opened(conn, reference: str, now) -> None:
+    """A chargeback was opened on a credited deposit: no money moves yet, but freeze cash play and
+    tell admins (respond in the provider's dashboard; a lost dispute arrives as a refund)."""
+    d = conn.execute("select * from deposits where psp_reference = %s", (reference,)).fetchone()
+    if d is None or d["status"] != "success":
+        return
+    naira = f"₦{d['amount_kobo'] / 100:,.0f}"
+    freeze(conn, d["user_id"], f"a chargeback was opened on a {naira} deposit", now)
+    player = conn.execute("select team_name from users where id = %s", (d["user_id"],)).fetchone()["team_name"]
+    from app.notify import notify
+    notify(conn, _admins_for(conn, d["user_id"]), "admin_alert", f"dispute:{d['id']}",
+           f"Chargeback opened: {player}, {naira}",
+           "Respond in the Paystack dashboard. The player's cash play is frozen meanwhile.", "#/admin/finance", now)
+
+
 def handle_webhook(conn, provider_name: str, raw: bytes, headers, now) -> dict:
     p = get(provider_name)
     event = p.parse_webhook(raw, headers)        # PermissionError on a bad signature
@@ -239,6 +321,10 @@ def handle_webhook(conn, provider_name: str, raw: bytes, headers, now) -> dict:
     if event.kind == "charge":
         if conn.execute("select 1 from deposits where psp_reference = %s", (event.reference,)).fetchone():
             settle_deposit(conn, event.reference, now)      # verifies with the provider before crediting
+    elif event.kind == "refund":
+        check_reversal(conn, event.reference, now)          # verifies with the provider before taking back
+    elif event.kind == "dispute" and event.status == "create":
+        dispute_opened(conn, event.reference, now)
     elif event.kind == "transfer":
         w = conn.execute("select * from withdrawals where psp_reference = %s for update", (event.reference,)).fetchone()
         if w and w["provider"] == provider_name:

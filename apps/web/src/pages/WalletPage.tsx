@@ -40,6 +40,9 @@ export default function WalletPage() {
       {w.kyc_required ? w.kyc_status !== 'verified' && (
         <a className="notice block-link" href="#/verify">🪪 Verify your ID (NIN or BVN) to add money and play for cash →</a>
       ) : <StartChecks w={w} onDone={reload} />}
+      {w.frozen_reason && (
+        <p className="notice warn">Cash play is paused: {w.frozen_reason}. Contact support to sort it out.</p>
+      )}
       {w.limits.self_excluded_until && (
         <p className="notice">You're on a break from paid play until {new Date(w.limits.self_excluded_until).toLocaleDateString()}.
           You can still withdraw.</p>

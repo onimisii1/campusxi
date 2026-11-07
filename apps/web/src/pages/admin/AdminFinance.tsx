@@ -10,6 +10,8 @@ type Finance = {
   player_cash_kobo: number; player_coins_kobo: number; held_kobo: number; in_pots_kobo: number
   platform_fee_kobo: number; coins_issued_kobo: number; deposits_24h_kobo: number; deposits_pending: number
   withdrawals_paid_24h_kobo: number; withdrawals_awaiting: number; paid_play_enabled: boolean
+  reversal_loss_kobo: number
+  frozen: { user_id: string; team_name: string; legal_name: string | null; reason: string; since: string }[]
   ledger: { balanced: boolean; total_kobo: number; negative_accounts: { account: string; b: number }[] }
 }
 type Queued = { id: string; user_id: string; amount_kobo: number; created_at: string; team_name: string
@@ -52,7 +54,19 @@ export default function AdminFinance() {
   const tiles: [string, number][] = [
     ['Players\' cash', f.player_cash_kobo], ['In play (held)', f.held_kobo], ['Awaiting payout', f.in_pots_kobo],
     ['Platform fees', f.platform_fee_kobo], ['Coins outstanding', f.player_coins_kobo], ['Deposits (24h)', f.deposits_24h_kobo],
+    ...(f.reversal_loss_kobo ? [['Lost to reversals', f.reversal_loss_kobo] as [string, number]] : []),
   ]
+
+  async function unfreeze(userId: string, name: string) {
+    if (!window.confirm(`Unpause cash play for ${name}? Only do this once the reversal or chargeback is sorted.`)) return
+    try {
+      await api(`/admin/users/${userId}/unfreeze`, token, { method: 'POST' })
+      toast('Cash play unpaused')
+      reload()
+    } catch (e) {
+      toast(errorText(e), 'bad')
+    }
+  }
   return (
     <section>
       <PageHeader title="Finance" back="#/admin" subtitle={f.paid_play_enabled ? 'Paid play is ON' : 'Paid play is off'} />
@@ -64,6 +78,21 @@ export default function AdminFinance() {
       <div className="stat-tiles money">
         {tiles.map(([label, v]) => <div key={label}><b>{naira(v)}</b><span>{label}</span></div>)}
       </div>
+      {f.frozen.length > 0 && (
+        <>
+          <h3>Cash play paused ({f.frozen.length})</h3>
+          <ul className="plain">
+            {f.frozen.map((p) => (
+              <li key={p.user_id} className="glass-card">
+                <div className="row between"><strong>{p.team_name}</strong>
+                  <small className="muted">{new Date(p.since).toLocaleDateString()}</small></div>
+                <p className="small muted">{p.reason}{p.legal_name ? ` · bank name ${p.legal_name}` : ''}</p>
+                <button className="link" onClick={() => unfreeze(p.user_id, p.team_name)}>Unfreeze</button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       <h3>Withdrawals to approve ({queue?.length ?? 0})</h3>
       {queue?.length === 0 && <p className="muted">Nothing waiting. First withdrawals and large ones land here.</p>}
       <ul className="plain">

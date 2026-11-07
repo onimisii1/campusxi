@@ -657,6 +657,18 @@ def correct_bank_name(user_id: UUID, body: LegalNameIn, user=Depends(require_adm
     return {"user_id": user_id, "legal_name": name}
 
 
+@router.post("/users/{user_id}/unfreeze")
+def unfreeze(user_id: UUID, user=Depends(require_admin), conn=Depends(get_conn)):
+    """Lift a cash-play freeze (reversed deposit or chargeback) once it's been sorted out with the player."""
+    target = conn.execute("select id, school_id, money_frozen_reason from users where id = %s", (user_id,)).fetchone()
+    if target is None:
+        raise ApiError(404, "user_not_found", "user not found")
+    _guard_school(user, target["school_id"])
+    conn.execute("update users set money_frozen_at = null, money_frozen_reason = null where id = %s", (user_id,))
+    audit(conn, user["id"], "user.money_unfrozen", "user", user_id, was=target["money_frozen_reason"])
+    return {"user_id": user_id, "frozen": False}
+
+
 @router.post("/users/{user_id}/roles")
 def set_roles(user_id: UUID, body: RolesIn, user=Depends(require_admin), conn=Depends(get_conn)):
     target = conn.execute("select * from users where id = %s", (user_id,)).fetchone()

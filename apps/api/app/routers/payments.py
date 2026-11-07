@@ -172,4 +172,10 @@ def finance(user=Depends(require_admin), conn=Depends(get_conn), now=Depends(utc
             "platform_fee_kobo": sums.get(wallet.PLATFORM_FEE, 0), "coins_issued_kobo": -sums.get(wallet.BONUS_POOL, 0),
             "deposits_24h_kobo": day["deposits"], "deposits_pending": day["pending"],
             "withdrawals_paid_24h_kobo": out["paid"], "withdrawals_awaiting": out["awaiting"],
-            "ledger": wallet.ledger_check(conn), "paid_play_enabled": settings.paid_play_enabled}
+            "ledger": wallet.ledger_check(conn), "paid_play_enabled": settings.paid_play_enabled,
+            "reversal_loss_kobo": -sums.get(wallet.REVERSAL_LOSS, 0),
+            # players whose cash play is paused by a reversed deposit or a chargeback
+            "frozen": conn.execute(
+                """select id as user_id, team_name, legal_name, money_frozen_reason as reason, money_frozen_at as since
+                   from users where money_frozen_at is not null and (%s or school_id = %s) order by money_frozen_at""",
+                ("superadmin" in user["roles"], user["school_id"])).fetchall()}

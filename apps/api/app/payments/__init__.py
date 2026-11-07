@@ -29,7 +29,7 @@ class Checkout:
 
 @dataclass(frozen=True)
 class Payment:
-    status: str            # success | failed | pending
+    status: str            # success | failed | pending | reversed (taken back after succeeding)
     amount_kobo: int
     channel: str | None = None
     fee_kobo: int = 0

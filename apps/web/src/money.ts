@@ -19,6 +19,7 @@ export type Wallet = {
   adult_confirmed: boolean
   legal_name: string | null
   legal_name_locked: boolean
+  frozen_reason: string | null       // a reversed deposit or an open chargeback pauses cash play
   deposit_methods: string[]
   limits: {
     daily_deposit_kobo: number | null

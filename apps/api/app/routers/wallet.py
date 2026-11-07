@@ -40,9 +40,11 @@ def my_wallet(user=Depends(current_user), conn=Depends(get_conn), now=Depends(ut
             "limits": limits(conn, user["id"], now),
             # KYC optional for now: the 18+ tick box, bank transfer only, and the bank name taken (and locked)
             # from the first bank-transfer deposit; only an admin can correct it.
-            "kyc_required": settings.kyc_required, "can_play_paid": identity_ok(user),
+            "kyc_required": settings.kyc_required,
+            "can_play_paid": identity_ok(user) and not user["money_frozen_at"],
             "adult_confirmed": user["adult_confirmed_at"] is not None, "legal_name": user["legal_name"],
             "legal_name_locked": user["legal_name"] is not None,
+            "frozen_reason": user["money_frozen_reason"] if user["money_frozen_at"] else None,
             "deposit_methods": ["card", "bank", "ussd", "bank_transfer"] if settings.kyc_required else ["bank_transfer"]}
 
 
