@@ -27,10 +27,19 @@ from set_payment_keys import check_paystack, mask  # noqa: E402
 
 NAME = "PAYSTACK_SECRET_KEY"
 NPX = shutil.which("npx.cmd") or shutil.which("npx") or "npx"
+# An installed Vercel CLI (npm i -g vercel) starts at once; through npx it's downloaded first, which on a
+# slow connection takes minutes with no output.
+INSTALLED = shutil.which("vercel.cmd") or shutil.which("vercel")
+_warned = False
 
 
 def vercel(*args, input_text: str | None = None, interactive: bool = False) -> subprocess.CompletedProcess:
-    cmd = [NPX, "--yes", "vercel@latest", *args]
+    global _warned
+    cmd = [INSTALLED, *args] if INSTALLED else [NPX, "--yes", "vercel@latest", *args]
+    if not INSTALLED and not _warned:
+        _warned = True
+        print("(Fetching Vercel's tool first: on slow internet this can take a few minutes with no output.\n"
+              " Tip: run  npm i -g vercel  once and this step becomes instant.)", flush=True)
     if interactive:
         return subprocess.run(cmd, cwd=API_DIR)
     return subprocess.run(cmd, cwd=API_DIR, input=input_text, capture_output=True, text=True)
@@ -85,4 +94,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print("\nStopped. Nothing was changed.")
+        sys.exit(1)
