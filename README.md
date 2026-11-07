@@ -166,9 +166,12 @@ URL, the anon/publishable key, the service_role/secret key and the database conn
 each one, and offers to create the CampusXI tables in the project's database. `--check` re-checks.
 
 **First-time data** (a new database has no schools or admins): from `apps/api`,
-`.\.venv\Scripts\python.exe scriptsootstrap.py add-school "Nile University of Nigeria"`, then, after
-signing in once and finishing your profile, `...ootstrap.py make-admin you@example.com --super`.
-`bootstrap.py list` shows what's there.
+`.\.venv\Scripts\python.exe scripts\bootstrap.py add-school "Nile University of Nigeria"`, then, after
+signing in once and finishing your profile, `...\bootstrap.py make-admin you@example.com --super`.
+`bootstrap.py list` shows what's there. Then load the real NUESA tournament from `data/` with
+`load-nuesa.cmd` (or `scripts\load_nuesa.py`): it checks the database is up to date and that the
+school and an admin exist, asks before writing, imports squads (jersey colours, captains), fixtures,
+results and scorers through the app's own admin import, and refuses to load twice.
 
 **In the Supabase dashboard:**
 1. Authentication → Providers → Email: enabled; "Confirm email" on.
