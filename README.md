@@ -165,6 +165,11 @@ URL, the anon/publishable key, the service_role/secret key and the database conn
 (secrets hidden), saves them to `apps/api/.env` and `apps/web/.env.local` (both gitignored), checks
 each one, and offers to create the CampusXI tables in the project's database. `--check` re-checks.
 
+**First-time data** (a new database has no schools or admins): from `apps/api`,
+`.\.venv\Scripts\python.exe scriptsootstrap.py add-school "Nile University of Nigeria"`, then, after
+signing in once and finishing your profile, `...ootstrap.py make-admin you@example.com --super`.
+`bootstrap.py list` shows what's there.
+
 **In the Supabase dashboard:**
 1. Authentication → Providers → Email: enabled; "Confirm email" on.
 2. Authentication → Emails → "Magic Link" template: include `{{ .Token }}` so players get a 6-digit
