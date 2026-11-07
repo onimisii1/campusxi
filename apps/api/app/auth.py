@@ -51,6 +51,8 @@ def current_user(identity: Identity = Depends(current_identity), conn=Depends(ge
     user = conn.execute("select * from users where id = %s", (identity.user_id,)).fetchone()
     if user is None:
         raise ApiError(403, "profile_required", "complete your CampusXI profile first")
+    if user.get("deleted_at"):
+        raise ApiError(403, "account_deleted", "this account was deleted")
     return user
 
 
@@ -60,7 +62,8 @@ def optional_user(creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
         return None
     try:
         claims = decode_token(creds.credentials)
-        return conn.execute("select * from users where id = %s", (UUID(claims["sub"]),)).fetchone()
+        return conn.execute("select * from users where id = %s and deleted_at is null",
+                            (UUID(claims["sub"]),)).fetchone()
     except (ApiError, jwt.PyJWTError, KeyError, ValueError):
         return None
 

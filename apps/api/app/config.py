@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     # supabase_jwt_secret only for projects still on the legacy HS256 secret (and tests).
     supabase_url: str = ""
     supabase_jwt_secret: str = ""
+    # Server-only key, used to delete a player's sign-in when they delete their account.
+    supabase_service_role_key: str = ""
     jwt_audience: str = "authenticated"
     # Paid contests and stakes need the fantasy licence, school approval and payments (Phase 5).
     paid_play_enabled: bool = False

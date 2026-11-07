@@ -3822,3 +3822,25 @@ hr.rule {
   width: 100%;
   margin: 10px 0;
 }
+
+/* account page */
+.account-email {
+  margin: 2px 0 0;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.danger-zone {
+  border-color: rgb(255 107 107 / 35%);
+}
+
+.sheet-btn.danger {
+  color: var(--bad);
+  border-color: rgb(255 107 107 / 40%);
+}
+
+.primary.danger-btn:not(:disabled) {
+  background: var(--bad);
+  color: #fff;
+  box-shadow: none;
+}

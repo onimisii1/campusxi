@@ -1,4 +1,5 @@
 import { ToastProvider } from './components/Toast'
+import AccountPage from './pages/AccountPage'
 import AdminFinance from './pages/admin/AdminFinance'
 import AdminHome from './pages/admin/AdminHome'
 import AdminMatchPage from './pages/admin/AdminMatchPage'
@@ -35,6 +36,7 @@ function Page({ route }: { route: string[] }) {
     case 'player': return <PlayerPage key={a} athleteId={a} />
     case 'wallet': return a === 'deposit' && b ? <DepositReturn key={b} reference={b} /> : <WalletPage />
     case 'live': return <LiveScore />
+    case 'account': return <AccountPage />
     case 'verify': return <VerifyPage />
     case 'limits': return <LimitsPage />
     case 'refer': return <ReferPage />

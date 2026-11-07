@@ -70,6 +70,7 @@ export default function MePage() {
         <li><a href="#/refer">Invite friends, earn coins <span aria-hidden>→</span></a></li>
         <li><a href="#/verify">Verify ID <span aria-hidden>→</span></a></li>
         <li><a href="#/limits">Limits and breaks <span aria-hidden>→</span></a></li>
+        <li><a href="#/account">Account and security <span aria-hidden>→</span></a></li>
         {me.roles.includes('scorer') && <li><a href="#/scorer">Scorer app <span aria-hidden>→</span></a></li>}
         {me.roles.some((r) => r === 'admin' || r === 'superadmin') && (
           <li><a href="#/admin">Admin: match day <span aria-hidden>→</span></a></li>)}

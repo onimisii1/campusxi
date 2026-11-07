@@ -150,6 +150,32 @@ only code that writes it, and every transaction must balance.
 - **Safety:** `Idempotency-Key` on every money POST, rate limits on money and ID routes, JSON request
   logs with request IDs, `/health` with database, jobs, providers and switches.
 
+### Accounts (Supabase)
+
+Players sign in with a one-time **email code** (no passwords). The Account page (menu → Account and
+security) shows the sign-in email and lets players **change email** (confirmed by a code to the new
+address, and to the old one when "Secure email change" is on), **sign out everywhere** (ends every
+session) and **delete the account** (`DELETE /me`): cash must be withdrawn and nothing left in play;
+coins are forfeited; the team name, photo and sign-in are erased while payment and match records
+stay, anonymised (NDPA right to erasure with financial record-keeping).
+
+**Connect a Supabase project:** double-click `apps/api/connect-supabase.cmd` (or
+`.\.venv\Scripts\python.exe scripts\connect_supabase.py` in `apps/api`). It asks for the project
+URL, the anon/publishable key, the service_role/secret key and the database connection string
+(secrets hidden), saves them to `apps/api/.env` and `apps/web/.env.local` (both gitignored), checks
+each one, and offers to create the CampusXI tables in the project's database. `--check` re-checks.
+
+**In the Supabase dashboard:**
+1. Authentication → Providers → Email: enabled; "Confirm email" on.
+2. Authentication → Emails → "Magic Link" template: include `{{ .Token }}` so players get a 6-digit
+   code (e.g. "Your CampusXI code is {{ .Token }}"); do the same for "Change Email Address".
+3. Authentication → Settings: email OTP length 6; "Secure email change" on.
+4. Authentication → URL Configuration: Site URL = the web app's address.
+5. Authentication → Emails → SMTP: add your own sender (e.g. Resend). Supabase's built-in sender
+   only allows a few emails an hour, which is fine for testing but not for players.
+6. Project Settings → JWT Keys: use the new asymmetric signing keys (the API verifies tokens against
+   the project's JWKS); otherwise set `SUPABASE_JWT_SECRET` in `apps/api/.env`.
+
 ### Going live checklist
 
 1. Production Supabase project; set `DATABASE_URL`, `SUPABASE_URL` (and the web app's
