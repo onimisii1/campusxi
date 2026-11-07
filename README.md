@@ -217,6 +217,12 @@ results and scorers through the app's own admin import, and refuses to load twic
 Two Vercel projects from this one repository, both on the free Hobby plan (it is for non-commercial
 use: move to Pro before real money is switched on).
 
+**Live now:** team `campusx-i` (onimisii1's Vercel, GitHub-connected, so every push to `main`
+redeploys both). Web app `campusxi` → https://campusxi.site (and www; DNS at Namecheap: `A @` and
+`CNAME www` from Vercel's Domains page, next to Resend's mail records). API `campusxi-api` →
+https://campusxi-api.vercel.app, region `lhr1` (London, beside the database). Supabase Auth Site
+URL is https://campusxi.site. Paystack Live webhook: https://campusxi-api.vercel.app/payments/paystack/webhook.
+
 - **Web app:** Root Directory `apps/web` (settings in `apps/web/vercel.json`). Environment:
   `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL` = the API project's address.
   Hash routes (`#/...`), so no rewrites are needed.
