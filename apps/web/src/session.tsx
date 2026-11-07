@@ -39,6 +39,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    // Back from an email sign-in link: supabase-js has read the tokens from the URL; tidy it up.
+    if (/access_token=|error_description=/.test(window.location.hash)) {
+      const failed = /error_description=([^&]+)/.exec(window.location.hash)
+      if (failed) sessionStorage.setItem('campusxi.signinError', decodeURIComponent(failed[1].replace(/\+/g, ' ')))
+      window.history.replaceState(null, '', `${window.location.pathname}#/`)
+    }
     reload()
     const sub = supabase?.auth.onAuthStateChange(() => { reload() })
     return () => sub?.data.subscription.unsubscribe()

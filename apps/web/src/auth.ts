@@ -6,7 +6,11 @@ const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 const DEV_TOKEN_KEY = 'campusxi.devToken'
 
-export const supabase: SupabaseClient | null = url && anonKey ? createClient(url, anonKey) : null
+// flowType 'implicit': a sign-in link lands back here with the session in the URL, which supabase-js
+// picks up on load (detectSessionInUrl); the app then clears it so the hash router sees a clean route.
+export const supabase: SupabaseClient | null = url && anonKey
+  ? createClient(url, anonKey, { auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true } })
+  : null
 export const devTokenMode = !supabase && import.meta.env.DEV
 
 export async function getToken(): Promise<string | null> {
@@ -19,7 +23,9 @@ export async function getToken(): Promise<string | null> {
 
 export async function sendCode(email: string): Promise<void> {
   if (!supabase) throw new Error('sign-in is not configured')
-  const { error } = await supabase.auth.signInWithOtp({ email })
+  // The email carries a 6-digit code ({{ .Token }} in the template) and a link; the link returns here.
+  const { error } = await supabase.auth.signInWithOtp({
+    email, options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` } })
   if (error) throw error
 }
 

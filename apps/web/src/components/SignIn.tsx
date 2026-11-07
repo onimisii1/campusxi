@@ -6,7 +6,11 @@ export default function SignIn({ onSignedIn, title = 'Sign in' }: { onSignedIn: 
   const [code, setCode] = useState('')
   const [sent, setSent] = useState(false)
   const [token, setToken] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() => {
+    const e = sessionStorage.getItem('campusxi.signinError')   // e.g. an expired email link
+    sessionStorage.removeItem('campusxi.signinError')
+    return e ? `${e}. Send a new code below.` : null
+  })
   const [busy, setBusy] = useState(false)
 
   async function run(fn: () => Promise<void>) {
@@ -53,7 +57,7 @@ export default function SignIn({ onSignedIn, title = 'Sign in' }: { onSignedIn: 
       }}
     >
       <h2>{title}</h2>
-      <p className="muted">We'll email you a one-time code. No password needed.</p>
+      <p className="muted">We'll email you a 6-digit code (or tap the link in the email). No password needed.</p>
       <label>
         Email
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={sent} />
