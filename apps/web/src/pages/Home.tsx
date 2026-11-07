@@ -3,6 +3,7 @@ import { EventCard, ScoreCard, type MatchCardData } from '../components/MatchCar
 import Skeleton from '../components/Skeleton'
 import SportSlider, { savedSport } from '../components/SportSlider'
 import Avatar from '../components/Avatar'
+import type { Inbox } from './NotificationsPage'
 import { naira, useWallet } from '../money'
 import { useSession } from '../session'
 import { useApi } from '../useApi'
@@ -83,6 +84,7 @@ function SwipePromo() {
 function Greeting() {
   const { status, me } = useSession()
   const { data: w } = useWallet()
+  const { data: inbox } = useApi<Inbox>(status === 'ready' ? '/me/notifications?limit=1' : null, 60_000)
   const h = new Date().getHours()
   const hello = h < 12 ? 'Good Morning!' : h < 17 ? 'Good Afternoon!' : 'Good Evening!'
   if (status === 'loading') return <div className="greet" />
@@ -105,9 +107,11 @@ function Greeting() {
             {naira(w.cash_kobo)}{w.bonus_kobo > 0 && <small className="coin">{naira(w.bonus_kobo)}</small>}
           </a>
         )}
-        <a className="round-btn" href="#/challenges" aria-label="Your challenges">
+        <a className="round-btn bell" href="#/notifications"
+          aria-label={inbox?.unread ? `Notifications: ${inbox.unread} new` : 'Notifications'}>
           <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"
             fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+          {!!inbox?.unread && <span className="bell-count">{inbox.unread > 9 ? '9+' : inbox.unread}</span>}
         </a>
       </span>
     </div>

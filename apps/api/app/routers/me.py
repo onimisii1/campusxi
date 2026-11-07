@@ -2,7 +2,8 @@
 import secrets
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 
 from app.audit import audit
 from app.auth import Identity, current_identity, current_user
@@ -94,3 +95,27 @@ def delete_account(user=Depends(current_user), conn=Depends(get_conn), now=Depen
     audit(conn, user["id"], "account.delete", "user", user["id"])
     _delete_sign_in(user["id"])      # last: if this fails, the whole deletion is rolled back
     return {"deleted": True}
+
+
+@router.get("/me/notifications")
+def my_notifications(limit: int = Query(default=50, ge=1, le=100), user=Depends(current_user),
+                     conn=Depends(get_conn)):
+    """The bell: newest first, plus how many are unread."""
+    items = conn.execute("""select id, kind, title, body, link, created_at, read_at from notifications
+                            where user_id = %s order by created_at desc, id desc limit %s""",
+                         (user["id"], limit)).fetchall()
+    unread = conn.execute("select count(*) as n from notifications where user_id = %s and read_at is null",
+                          (user["id"],)).fetchone()["n"]
+    return {"items": items, "unread": unread}
+
+
+class ReadIn(BaseModel):
+    ids: list[int] | None = None          # none: mark everything read
+
+
+@router.post("/me/notifications/read")
+def read_notifications(body: ReadIn, user=Depends(current_user), conn=Depends(get_conn), now=Depends(utcnow)):
+    conn.execute("""update notifications set read_at = %s where user_id = %s and read_at is null
+                    and (%s::bigint[] is null or id = any(%s))""", (now, user["id"], body.ids, body.ids))
+    return {"unread": conn.execute("select count(*) as n from notifications where user_id = %s and read_at is null",
+                                   (user["id"],)).fetchone()["n"]}

@@ -17,7 +17,7 @@ from app.auth import current_user, optional_user
 from app.clock import utcnow
 from app.config import settings
 from app.db import get_conn
-from app import wallet
+from app import notify, wallet
 from app.engines.p2p import (FANTASY_H2H, MATCH_RESULT, Bet, Fill, opposite, quote_creator,
                             quote_fill, validate_fill, validate_new_bet)
 from app.gate import identity_ok, require_paid_play
@@ -293,6 +293,7 @@ def accept(bet_id: UUID, body: FillIn, request: Request, user=Depends(current_us
     status = "matched" if matched == b["stake_kobo"] else "partially_matched"
     conn.execute("update p2p_bets set status = %s, matched_kobo = %s where id = %s", (status, matched, bet_id))
     bet_event(conn, bet_id, b["status"], status, f"user:{user['id']}")
+    notify.challenge_taken(conn, b, user["team_name"], now)
     return idem.save({"bet_id": bet_id, "status": status, "fill_id": fill["id"], "amount_kobo": amount,
                       "quote": quote_fill(bet, amount) if result_bet or b["stake_kobo"] else None})
 

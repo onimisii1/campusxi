@@ -6,7 +6,9 @@ import AdminMatchPage from './pages/admin/AdminMatchPage'
 import AdminTournament from './pages/admin/AdminTournament'
 import ChallengeInvite from './pages/ChallengeInvite'
 import ContestBoard from './pages/ContestBoard'
+import DepartmentPage from './pages/DepartmentPage'
 import Home from './pages/Home'
+import NotificationsPage from './pages/NotificationsPage'
 import LiveScore from './pages/LiveScore'
 import MatchHub from './pages/MatchHub'
 import MatchSection, { SECTIONS, type Section } from './pages/MatchSection'
@@ -46,6 +48,8 @@ function Page({ route }: { route: string[] }) {
     case 'challenge': return <ChallengeInvite key={a} token={a} />
     case 'challenges': return <MyChallenges />
     case 'swipe': return <SwipePage key={a ?? 'all'} matchId={a} />
+    case 'team': return <DepartmentPage key={a} teamId={a} />
+    case 'notifications': return <NotificationsPage />
     case 'me': return <MePage />
     case 'signin': return <SignInPage />
     case 'profile': return <ProfilePage />

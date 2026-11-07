@@ -10,6 +10,7 @@ from app.clock import utcnow
 from app.competition import (bracket, cached, fantasy_scores, last_match_points, pick_share, played_matches,
                              player_stats, scoreline, standings)
 from app.db import get_conn
+from app.departments import department, preview
 from app.engines.payouts import final_ranks
 from app.errors import ApiError
 from app.fantasy import totals_since
@@ -280,6 +281,19 @@ def get_match(match_id: UUID, conn=Depends(get_conn), now=Depends(utcnow)):
                                     "played_last": prev["played"] if prev else False,
                                     "picked_pct": share.get(str(a["id"]))})
     return out
+
+
+@router.get("/teams/{team_id}/department")
+def department_page(team_id: UUID, conn=Depends(get_conn), now=Depends(utcnow)):
+    """A department's page: every sport it plays at this school (squad with captain, table place,
+    form, results, next match, top performers). Any of its teams' ids opens it."""
+    return department(conn, team_id, now)
+
+
+@router.get("/matches/{match_id}/preview")
+def match_preview(match_id: UUID, conn=Depends(get_conn), now=Depends(utcnow)):
+    """Before kick-off: both sides' table place, form, captain, top performers, and past meetings."""
+    return preview(conn, load_match(conn, match_id), now)
 
 
 @router.get("/athletes/{athlete_id}")

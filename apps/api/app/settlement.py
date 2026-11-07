@@ -7,7 +7,7 @@ release every hold, so everyone gets their money (and coins) back.
 """
 from datetime import timedelta
 
-from app import wallet
+from app import notify, wallet
 from app.config import settings
 from app.engines.p2p import FANTASY_H2H, Bet, Fill, commission, settle_h2h, settle_result_bet
 from app.engines.payouts import final_ranks, payout_table, settle_contest
@@ -154,6 +154,7 @@ def release_payouts(conn, now) -> dict:
                               (c["id"],)).fetchall():
             prizes[e["user_id"]] = prizes.get(e["user_id"], 0) + e["prize_kobo"]
         wallet.pay_out(conn, wallet.pot("contest", c["id"]), prizes, c["fee_kobo"], "contest", c["id"])
+        notify.winnings_paid(conn, prizes, f"{c['name']} contest", f"contest:{c['id']}", now)
         conn.execute("update contest_entries set prize_paid_at = %s where contest_id = %s and prize_kobo > 0",
                      (now, c["id"]))
         conn.execute("update contests set paid_out_at = %s where id = %s", (now, c["id"]))
@@ -166,6 +167,7 @@ def release_payouts(conn, now) -> dict:
             prizes[f["challenger_id"]] = prizes.get(f["challenger_id"], 0) + f["payout_kobo"]
         wallet.pay_out(conn, wallet.pot("bet", b["id"]), prizes, b["platform_kobo"], "bet", b["id"],
                        prize_type="payout", fee_type="commission")
+        notify.winnings_paid(conn, prizes, "challenge", f"bet:{b['id']}", now)
         conn.execute("update p2p_bets set paid_out_at = %s where id = %s", (now, b["id"]))
         done["bets"] += 1
     return done

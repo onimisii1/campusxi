@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 
+from app import notify
 from app.audit import audit
 from app.auth import require_admin, require_superadmin
 from app.clock import utcnow
@@ -116,18 +117,18 @@ async def import_squads(tournament_id: UUID, request: Request, user=Depends(requ
     teams = {r["name"].lower(): r["id"] for r in conn.execute(
         "select id, name from teams where tournament_id = %s", (t["id"],)).fetchall()}
     new_teams = new_athletes = updated = 0
-    for team, athlete, position in rows:
+    for team, athlete, position, captain in rows:
         if team.lower() not in teams:
             teams[team.lower()] = conn.execute(
                 "insert into teams (tournament_id, name) values (%s, %s) returning id", (t["id"], team)
             ).fetchone()["id"]
             new_teams += 1
         res = conn.execute(
-            """insert into athletes (team_id, display_name, position) values (%s, %s, %s)
+            """insert into athletes (team_id, display_name, position, is_captain) values (%s, %s, %s, %s)
                on conflict (team_id, display_name)
-               do update set position = excluded.position, active = true
+               do update set position = excluded.position, is_captain = excluded.is_captain, active = true
                returning (xmax = 0) as inserted""",
-            (teams[team.lower()], athlete, position),
+            (teams[team.lower()], athlete, position, captain),
         ).fetchone()
         new_athletes += res["inserted"]
         updated += not res["inserted"]
@@ -309,6 +310,7 @@ def publish_lineup(match_id: UUID, body: LineupIn, user=Depends(require_admin), 
     conn.execute("update matches set status = 'lineup_out' where id = %s", (match_id,))
     audit(conn, user["id"], "match.publish_lineup", "match", match_id,
           starters=len(body.starters), bench=len(body.bench))
+    notify.lineups_out(conn, m, now)
     return {"match_id": match_id, "status": "lineup_out", "starters": len(body.starters), "bench": len(body.bench)}
 
 
@@ -418,6 +420,7 @@ def confirm_result(match_id: UUID, body: ConfirmIn, user=Depends(require_admin),
     )
     conn.execute("update matches set status = 'confirmed' where id = %s", (match_id,))
     settle_free(conn, m, body.official_scorer_id, now)
+    notify.result_confirmed(conn, m, body.home_score, body.away_score, now)
     audit(conn, user["id"], "match.confirm", "match", match_id, score=f"{body.home_score}-{body.away_score}",
           official_scorer_id=body.official_scorer_id)
     return {"match_id": match_id, "status": "confirmed", "winner": winner, "shootout_winner": body.shootout_winner,

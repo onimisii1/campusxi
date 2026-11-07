@@ -81,7 +81,8 @@ def _read(text: str, required: tuple) -> tuple:
 
 
 def parse_squads(text: str, sport: str) -> tuple:
-    """Returns ([(team, athlete, position)], {team: '#RRGGBB'}, errors)."""
+    """Returns ([(team, athlete, position, is_captain)], {team: '#RRGGBB'}, errors).
+    An optional note column marks the captain ("captain" anywhere in the note)."""
     rows, errors = _read(text, ("team", "athlete", "position"))
     out, seen, colours = [], set(), {}
     for line, r in rows:
@@ -109,7 +110,7 @@ def parse_squads(text: str, sport: str) -> tuple:
             errors.append({"row": line, "message": f"{athlete} is listed twice for {team}"})
             continue
         seen.add(key)
-        out.append((team, athlete, pos))
+        out.append((team, athlete, pos, "captain" in (r.get("note") or "").lower()))
     return out, colours, errors
 
 

@@ -174,7 +174,7 @@ function LeagueTable({ tournamentId, sport, name }: { tournamentId: string; spor
             {data.rows.map((r) => (
               <tr key={r.team.id} className={r.rank <= 4 ? 'qualify' : ''}>
                 <td>{r.rank}{r.shared ? '=' : ''}</td>
-                <td><span className="row-team"><TeamChip team={r.team} />
+                <td><span className="row-team"><a className="plain-link" href={`#/team/${r.team.id}`}><TeamChip team={r.team} /></a>
                   <span className="form">{r.form.map((f, i) => <i key={i} className={`f-${f}`} title={f} />)}</span></span></td>
                 <td>{r.played}</td><td>{r.won}</td>{football && <td>{r.drawn}</td>}<td>{r.lost}</td>
                 <td>{r.difference > 0 ? `+${r.difference}` : r.difference}</td>

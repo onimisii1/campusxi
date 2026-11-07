@@ -50,8 +50,14 @@ def _expire_bonus(conn, now):
     return {"expired_kobo": expire_bonus(conn, now)}
 
 
+def _deadline_reminders(conn, now):
+    from app.notify import deadline_reminders
+    return deadline_reminders(conn, now)
+
+
 JOBS = [
     Job("refund_at_lock", 60, _refund_at_lock),
+    Job("deadline_reminders", 300, _deadline_reminders),
     Job("release_payouts", 300, _release_payouts),
     Job("reconcile_payments", 900, _reconcile),
     Job("expire_bonus", 3600, _expire_bonus),
