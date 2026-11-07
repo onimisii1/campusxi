@@ -1,0 +1,8 @@
+# Not needed on Vercel (the API's entrypoint is index.py)
+.venv/
+.devdb/
+.pytest_cache/
+tests/
+scripts/
+*.cmd
+.env

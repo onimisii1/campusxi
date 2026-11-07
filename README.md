@@ -207,9 +207,36 @@ results and scorers through the app's own admin import, and refuses to load twic
    **and** it has paid into the wallet; if the bank names don't line up, an admin approves. Referral
    coins are paid when the friend's first ₦1,000+ deposit comes from an account no other player has
    paid in from.
-4. Switches: `PAID_PLAY_ENABLED=true`; `RESULT_BETS_ENABLED=true` only if the licence covers sports
-   betting; `JOBS_ENABLED=true` on exactly one API instance (or run the cron entry instead).
-5. Check `/health` (database ok, providers listed, jobs running) and `#/admin/finance` (ledger balanced).
+4. Switches: `PAID_PLAY_ENABLED=true` only once the gaming licence and Paystack's live approval are
+   held; `RESULT_BETS_ENABLED=true` only if the licence covers sports betting; background jobs on
+   exactly one place (see Hosting below).
+5. Check `/health` (database ok, providers listed) and `#/admin/finance` (ledger balanced).
+
+### Hosting (Vercel, free plan)
+
+Two Vercel projects from this one repository, both on the free Hobby plan (it is for non-commercial
+use: move to Pro before real money is switched on).
+
+- **Web app:** Root Directory `apps/web` (settings in `apps/web/vercel.json`). Environment:
+  `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL` = the API project's address.
+  Hash routes (`#/...`), so no rewrites are needed.
+- **API:** Root Directory `apps/api`, framework FastAPI. Vercel's entrypoint is `apps/api/index.py`
+  (the normal app plus the jobs route below); `apps/api/vercel.json` gives it 60 s per request.
+  Environment: `DATABASE_URL` (Supabase pooler; prefer the Transaction pooler, port 6543),
+  `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PAYSTACK_SECRET_KEY` (plus Flutterwave's if used),
+  `KYC_PEPPER` (long random), `KYC_REQUIRED=false`, `PUBLIC_APP_URL` = the web address,
+  `CORS_ORIGINS=["<web address>"]`, `PAID_PLAY_ENABLED=false`, `RESULT_BETS_ENABLED=false`,
+  `JOBS_ENABLED=false` and `CRON_SECRET` (below).
+- **Background jobs** (refunds at kick-off, payouts, reminders, reconciliation, coin expiry): Vercel
+  only runs the API during a request, so **Supabase Cron** calls `POST /jobs/run/<job>` with
+  `Authorization: Bearer <CRON_SECRET>` on each job's interval. Set it up once the API is deployed:
+  `apps/api/schedule-jobs.cmd https://<api address>` (or `scripts\schedule_jobs.py`). It turns on
+  pg_cron and pg_net, keeps the secret in Supabase Vault, schedules every job in `app/jobs.py`, and
+  prints the secret once for Vercel's `CRON_SECRET` (redeploy after setting it). `--test` calls one
+  job now, `--status` shows the last calls (200 = ran), `--off` stops them. Jobs are idempotent and
+  locked, so a late or repeated call is harmless. Run the scheduler again after adding a job.
+- After deploying: Supabase → Authentication → URL Configuration (Site URL and redirect URLs = the
+  web address), and the payment webhooks at `https://<api address>/payments/.../webhook`.
 
 
 ## Tests
