@@ -1,0 +1,5 @@
+# Not uploaded to Vercel (it builds from source)
+node_modules/
+dist/
+.env
+.env.*
