@@ -8,6 +8,10 @@ import { useApi } from '../useApi'
 type SquadAthlete = { id: string; name: string; position: string; lineup: 'starting' | 'bench' | null }
 type Detail = MatchCardData & { squads: { home: SquadAthlete[]; away: SquadAthlete[] } }
 
+// Squads read back to front, like a team sheet: keeper, defence, midfield, attack.
+const POSITIONS = ['GK', 'DEF', 'MID', 'FWD', 'G', 'F', 'C', 'P', 'S', 'OH', 'OPP', 'MB', 'L']
+const posOrder = (p: string) => (POSITIONS.indexOf(p) + 1) || 99
+
 export default function MatchHub({ matchId }: { matchId: string }) {
   const { data: m, error } = useApi<Detail>(`/matches/${matchId}`)
   if (error) return <p className="error">{error}</p>
@@ -29,7 +33,8 @@ export default function MatchHub({ matchId }: { matchId: string }) {
               <ul className="plain">
                 {m.squads[side]
                   .filter((a) => !lineupOut || a.lineup)
-                  .sort((a, b) => Number(b.lineup === 'starting') - Number(a.lineup === 'starting'))
+                  .sort((a, b) => Number(b.lineup === 'starting') - Number(a.lineup === 'starting')
+                    || posOrder(a.position) - posOrder(b.position) || a.name.localeCompare(b.name))
                   .map((a) => (
                     <li key={a.id} className={a.lineup === 'bench' ? 'bench' : ''}>
                       <span className="pos-tag">{a.position}</span>

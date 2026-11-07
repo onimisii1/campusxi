@@ -1,9 +1,10 @@
 import { mediaUrl } from '../media'
-import { teamCode, teamColour } from '../teamStyle'
+import { teamCode } from '../teamStyle'
 
-/** A team's round badge, as in the design: the crest in a white circle, or (no crest yet) the jersey
- *  colour with the team code. */
-export default function TeamBadge({ name, colour, logo, small = false }: {
+/** A team's round badge, as in the design: the crest in a white circle, or (no crest yet) the team
+ *  code in dark type on the same white circle. Jersey colours stay off the badges (fewer colours);
+ *  they still show on the pitch shirts, where they tell the two sides apart. */
+export default function TeamBadge({ name, logo, small = false }: {
   name: string; colour?: string | null; logo?: string | null; small?: boolean
 }) {
   if (logo) {
@@ -13,14 +14,9 @@ export default function TeamBadge({ name, colour, logo, small = false }: {
       </span>
     )
   }
-  const fill = (colour || teamColour(name)).toUpperCase()
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(fill.slice(i, i + 2), 16))
-  const light = 0.299 * r + 0.587 * g + 0.114 * b > 170
   return (
-    <span className={`team-badge ${small ? 'small' : ''}`} aria-hidden>
-      <i style={{ background: fill, color: light ? '#11130e' : '#fff', boxShadow: light ? 'inset 0 0 0 1px #d6d8cf' : undefined }}>
-        {teamCode(name)}
-      </i>
+    <span className={`team-badge mono ${small ? 'small' : ''}`} aria-hidden>
+      <i>{teamCode(name)}</i>
     </span>
   )
 }
