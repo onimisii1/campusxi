@@ -1,5 +1,10 @@
 import type { MyBet } from '../components/MyBetRow'
+import { useState } from 'react'
+import Avatar from '../components/Avatar'
 import PageHeader from '../components/PageHeader'
+import { AVATAR, pickPhoto, resize, uploadImage } from '../media'
+import { useToast } from '../toast'
+import { errorText } from '../useApi'
 import { signInThenReturn } from '../router'
 import { useSession } from '../session'
 import { useApi } from '../useApi'
@@ -7,7 +12,9 @@ import { useApi } from '../useApi'
 type School = { id: string; name: string }
 
 export default function MePage() {
-  const { status, me, signOut } = useSession()
+  const { status, me, signOut, token, reload } = useSession()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
   const { data: schools } = useApi<School[]>(status === 'ready' ? '/schools' : null)
   const { data: bets } = useApi<MyBet[]>(status === 'ready' ? '/me/bets' : null)
 
@@ -28,13 +35,29 @@ export default function MePage() {
 
   const school = schools?.find((s) => s.id === me.school_id)?.name
   const record = (r: string) => bets?.filter((b) => b.result === r).length ?? 0
-  const initials = me.team_name.split(/[\s_]+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
+  async function changePhoto() {
+    const file = await pickPhoto()
+    if (!file) return
+    setBusy(true)
+    try {
+      await uploadImage('/me/avatar', token, await resize(file, AVATAR))
+      await reload()
+      toast('Photo updated')
+    } catch (e) {
+      toast(e instanceof Error && !('code' in e) ? e.message : errorText(e), 'bad')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <section>
       <PageHeader title="Profile" back="#/" action={<span className="round-btn ghost" aria-hidden />} />
       <div className="profile-card">
-        <span className="avatar" aria-hidden>{initials}</span>
+        <button className="avatar-btn" onClick={changePhoto} disabled={busy} aria-label="Change your photo">
+          <Avatar name={me.team_name} url={me.avatar_url} size={64} />
+          <span className="avatar-edit" aria-hidden>{busy ? '…' : '📷'}</span>
+        </button>
         <div>
           <strong>{me.team_name}</strong>
           {school && <span className="muted small block">{school}</span>}

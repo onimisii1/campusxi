@@ -203,6 +203,12 @@ The fan app: event cards for every match of the chosen sport, a match page (your
 pitch-view team builder with Quick pick and search, leaderboards that refresh themselves while a
 match is live, season tables and challenge invite links.
 
+**Photos.** Players change their picture by tapping it on the profile page; admins upload team
+crests (Squads tab) and a match photo (match page) that fills the match screen. Photos are resized
+on the phone (avatars 256 px square, crests 256 px PNG, match photos 1280 px JPEG), sent to
+`PUT /me/avatar`, `PUT /admin/teams/{id}/logo` or `PUT /admin/matches/{id}/photo`, checked by
+their bytes (PNG, JPEG or WebP only, 1.5 MB at most; never SVG) and served from `/media/{id}`.
+
 Contests are cards with the prize, a filled-spots bar and a Join button that opens a sheet to
 choose a team. A contest's page has Winnings (prize table if it fills, or as it stands now),
 Rules and Entries tabs, with Leaderboard first once the match starts. The team builder has

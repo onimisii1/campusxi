@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { countdown, deadline, points } from '../format'
 import { LIVE_REFRESH_MS, useApi } from '../useApi'
+import Avatar from './Avatar'
 import TeamBadge from './TeamBadge'
 import UpdatedStamp from './UpdatedStamp'
 
@@ -26,6 +27,8 @@ export type MatchCardData = {
   scheduled_minutes?: number
   fans?: number
   fans_preview?: string[]
+  fans_avatars?: (string | null)[]
+  photo_url?: string | null
 }
 
 type Summary = { players: number; teams: number; my_teams: number; my_points: number | null; average: number | null
@@ -91,7 +94,9 @@ export function FansRow({ m }: { m: MatchCardData }) {
   return (
     <span className="fans-row">
       <span className="avatars">
-        {(m.fans_preview ?? []).map((f) => <i key={f}>{initials(f)}</i>)}
+        {(m.fans_preview ?? []).map((f, i) => m.fans_avatars?.[i]
+          ? <i key={f} className="pic"><Avatar name={f} url={m.fans_avatars[i]} size={28} /></i>
+          : <i key={f}>{initials(f)}</i>)}
         <i className="count">{n}</i>
       </span>
       <span className="small">{m.fans === 1 ? 'fan picked a team' : 'fans picked a team'}</span>

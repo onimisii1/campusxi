@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { EventCard, ScoreCard, type MatchCardData } from '../components/MatchCard'
 import Skeleton from '../components/Skeleton'
 import SportSlider, { savedSport } from '../components/SportSlider'
+import Avatar from '../components/Avatar'
 import { naira, useWallet } from '../money'
 import { useSession } from '../session'
 import { useApi } from '../useApi'
@@ -79,10 +80,9 @@ function Greeting() {
       </div>
     )
   }
-  const initials = me.team_name.split(/[\s_]+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase()
   return (
     <div className="greet">
-      <a className="who plain-link" href="#/me" aria-label="Your profile and menu"><span className="avatar">{initials}</span>
+      <a className="who plain-link" href="#/me" aria-label="Your profile and menu"><Avatar name={me.team_name} url={me.avatar_url} />
         <span><small>{hello}</small><strong>{me.team_name}</strong></span></a>
       <span className="greet-right">
         {w && (

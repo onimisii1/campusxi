@@ -3,6 +3,7 @@ import { api } from '../../api'
 import PageHeader from '../../components/PageHeader'
 import Skeleton from '../../components/Skeleton'
 import { kickoff } from '../../format'
+import { MATCH_PHOTO, pickPhoto, resize, uploadImage } from '../../media'
 import { useSession } from '../../session'
 import { useToast } from '../../toast'
 import { errorText, useApi } from '../../useApi'
@@ -91,6 +92,18 @@ export default function AdminMatchPage({ tournamentId, matchId }: { tournamentId
         </div>
       )}
 
+      {published && (
+        <button className="sheet-btn photo-btn" onClick={async () => {
+          const file = await pickPhoto()
+          if (!file) return
+          try {
+            await uploadImage(`/admin/matches/${matchId}/photo`, token, await resize(file, MATCH_PHOTO))
+            toast('Match photo uploaded: it shows behind the match screen')
+          } catch (e) {
+            toast(e instanceof Error && !('code' in e) ? e.message : errorText(e), 'bad')
+          }
+        }}>📷 Upload match photo</button>
+      )}
       {!done && published && <Scorers matchId={matchId} assigned={m.scorers} onDone={refresh} />}
       {!done && detail && !detail.locked && <Lineup detail={detail} onDone={refresh} />}
       {['live', 'final_pending'].includes(m.status) && <Result matchId={matchId} onDone={refresh} />}

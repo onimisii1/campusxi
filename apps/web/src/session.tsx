@@ -3,7 +3,7 @@ import { api, ApiError, OfflineError } from './api'
 import { getToken, signOut as authSignOut, supabase } from './auth'
 import { recall, remember } from './cache'
 
-export type Me = { id: string; team_name: string; roles: string[]; school_id: string }
+export type Me = { id: string; team_name: string; roles: string[]; school_id: string; avatar_url?: string | null }
 
 type Status = 'loading' | 'signed_out' | 'needs_profile' | 'ready'
 type Session = { status: Status; token: string | null; me: Me | null; reload: () => Promise<void>; signOut: () => Promise<void> }

@@ -3766,3 +3766,59 @@ hr.rule {
 .clock-time {
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- photos ---------- */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  flex: none;
+}
+
+.avatar.photo {
+  object-fit: cover;
+  background: var(--raised);
+}
+
+.avatar-btn {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+}
+
+.avatar-edit {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--on-lime);
+  font-size: 0.8rem;
+  border: 2px solid var(--surface);
+}
+
+.avatars i.pic {
+  padding: 0;
+  overflow: hidden;
+}
+
+.avatars i.pic .avatar {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.match-hero.has-photo {
+  background-size: cover;
+  background-position: center;
+}
+
+.photo-btn {
+  width: 100%;
+  margin: 10px 0;
+}

@@ -2,6 +2,7 @@
 // a failed fetch (no signal) surfaces as OfflineError so callers can queue and retry.
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+export const API_BASE = BASE
 
 export class ApiError extends Error {
   status: number

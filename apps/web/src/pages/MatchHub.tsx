@@ -1,4 +1,5 @@
 import MatchCard, { statusPill, type MatchCardData } from '../components/MatchCard'
+import { mediaUrl } from '../media'
 import { sideColours } from '../teamStyle'
 import TeamBadge from '../components/TeamBadge'
 import Skeleton from '../components/Skeleton'
@@ -50,8 +51,10 @@ export default function MatchHub({ matchId }: { matchId: string }) {
 function MatchHero({ m }: { m: Detail }) {
   const colours = sideColours(m.home_team, m.away_team)
   const live = m.status === 'live'
+  const photo = mediaUrl(m.photo_url)
   return (
-    <div className="match-hero" style={{ ['--home' as string]: colours.home, ['--away' as string]: colours.away }}>
+    <div className={`match-hero ${photo ? 'has-photo' : ''}`} style={{ ['--home' as string]: colours.home,
+      ['--away' as string]: colours.away, ...(photo ? { backgroundImage: `url("${photo}")` } : {}) }}>
       <div className="hero-bar">
         <a className="round-btn glassy" href="#/" aria-label="Back">
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor"
@@ -65,10 +68,10 @@ function MatchHero({ m }: { m: Detail }) {
             strokeWidth="2.2" strokeLinecap="round" /></svg>
         </a>
       </div>
-      <div className="hero-crests" aria-hidden>
+      {!photo && <div className="hero-crests" aria-hidden>
         <TeamBadge name={m.home_team.name} colour={m.home_team.colour} logo={m.home_team.logo} />
         <TeamBadge name={m.away_team.name} colour={m.away_team.colour} logo={m.away_team.logo} />
-      </div>
+      </div>}
     </div>
   )
 }

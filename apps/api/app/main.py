@@ -8,7 +8,7 @@ from app import errors, jobs
 from app.config import settings
 from app.engines.scoring.rules import CURRENT_VERSION
 from app.middleware import RateLimit, RequestContext, setup_logging
-from app.routers import admin, bets, contests, me, payments, public, scorer, teams, wallet
+from app.routers import admin, bets, contests, me, media, payments, public, scorer, teams, wallet
 
 
 @asynccontextmanager
@@ -36,6 +36,7 @@ app.include_router(scorer.router)
 app.include_router(admin.router)
 app.include_router(wallet.router)
 app.include_router(payments.router)
+app.include_router(media.router)
 
 
 @app.get("/health")

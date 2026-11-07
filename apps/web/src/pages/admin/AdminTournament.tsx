@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api'
 import PageHeader from '../../components/PageHeader'
 import Skeleton from '../../components/Skeleton'
 import TeamBadge from '../../components/TeamBadge'
+import { CREST, pickPhoto, resize, uploadImage } from '../../media'
 import { kickoff } from '../../format'
 import { useSession } from '../../session'
 import { useToast } from '../../toast'
@@ -236,6 +237,19 @@ function TeamLook({ t, onDone }: { t: TeamRow; onDone: () => void }) {
   const toast = useToast()
   const [logo, setLogo] = useState(t.logo ?? '')
   const [colour, setColour] = useState(t.colour ?? '')
+  async function uploadCrest() {
+    const file = await pickPhoto()
+    if (!file) return
+    try {
+      const r = await uploadImage<{ logo: string }>(`/admin/teams/${t.id}/logo`, token, await resize(file, CREST))
+      setLogo(r.logo)
+      toast(`${t.name}: crest uploaded`)
+      onDone()
+    } catch (e) {
+      toast(e instanceof Error && !('code' in e) ? e.message : errorText(e), 'bad')
+    }
+  }
+
   async function save() {
     try {
       await api(`/admin/teams/${t.id}`, token, { method: 'PATCH', body: { logo_url: logo.trim(), colour: colour.trim() } })
@@ -247,10 +261,11 @@ function TeamLook({ t, onDone }: { t: TeamRow; onDone: () => void }) {
   }
   return (
     <div className="glass-card team-look">
-      <TeamBadge name={t.name} colour={colour || t.colour} logo={logo.startsWith('https://') ? logo : t.logo} />
+      <TeamBadge name={t.name} colour={colour || t.colour} logo={logo.startsWith('https://') || logo.startsWith('/media/') ? logo : t.logo} />
       <div className="form-grid">
-        <label>Crest image (https link)<input value={logo} onChange={(e) => setLogo(e.target.value)} placeholder="https://…/crest.png" /></label>
+        <label>Crest image link (or upload below)<input value={logo} onChange={(e) => setLogo(e.target.value)} placeholder="https://…/crest.png" /></label>
         <label>Jersey colour<input value={colour} onChange={(e) => setColour(e.target.value)} placeholder="blue or #1565C0" /></label>
+        <button className="sheet-btn" onClick={uploadCrest}>📷 Upload crest image</button>
         <button className="primary" onClick={save}>Save {t.name}'s look</button>
       </div>
     </div>

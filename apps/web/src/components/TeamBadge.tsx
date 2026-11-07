@@ -1,3 +1,4 @@
+import { mediaUrl } from '../media'
 import { teamCode, teamColour } from '../teamStyle'
 
 /** A team's round badge, as in the design: the crest in a white circle, or (no crest yet) the jersey
@@ -8,7 +9,7 @@ export default function TeamBadge({ name, colour, logo, small = false }: {
   if (logo) {
     return (
       <span className={`team-badge crest ${small ? 'small' : ''}`} aria-hidden>
-        <img src={logo} alt="" loading="lazy" referrerPolicy="no-referrer" />
+        <img src={mediaUrl(logo)!} alt="" loading="lazy" referrerPolicy="no-referrer" />
       </span>
     )
   }
