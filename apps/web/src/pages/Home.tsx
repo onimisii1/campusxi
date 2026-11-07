@@ -3,6 +3,7 @@ import { EventCard, ScoreCard, type MatchCardData } from '../components/MatchCar
 import Skeleton from '../components/Skeleton'
 import SportSlider, { savedSport } from '../components/SportSlider'
 import Avatar from '../components/Avatar'
+import Logo from '../components/Logo'
 import { naira, useWallet } from '../money'
 import { useSession } from '../session'
 import { useApi } from '../useApi'
@@ -30,7 +31,10 @@ export default function Home() {
   return (
     <section>
       <Greeting />
-      <h1 className="headline">Choose your<br /><b>Favorite game</b></h1>
+      <div className="brand-stage">
+        <span className="brand-orb" aria-hidden />
+        <h1 className="brand-glass"><Logo size={46} /><span className="brand-word">Campus<b>XI</b></span></h1>
+      </div>
       <SportSlider value={sport} onChange={setSport} />
       {error && <p className="error">{error}</p>}
       {!data && !error && <Skeleton hero rows={2} />}
