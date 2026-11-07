@@ -5126,3 +5126,209 @@ a.primary.as-button,
 .link-pair .action-pill {
   flex: none;
 }
+
+/* ---------- sign-in and profile set-up (Nov 2026) ---------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ink {
+  color: var(--ink);
+}
+
+.auth {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 0 24px;
+}
+
+.auth .headline {
+  margin: 0 0 2px;
+}
+
+.auth > .muted {
+  margin: 0;
+}
+
+.field-lg {
+  width: 100%;
+  min-height: 54px;
+  padding: 0 18px;
+  border-radius: 18px;
+  font-size: 1.02rem;
+}
+
+.text-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.text-actions .link:disabled {
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* six code boxes */
+.code-boxes {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.code-boxes input {
+  width: 100%;
+  height: 58px;
+  padding: 0;
+  border-radius: 16px;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  caret-color: var(--lime);
+}
+
+.code-boxes input:focus {
+  outline: 2px solid var(--lime);
+  outline-offset: 0;
+}
+
+/* profile set-up */
+.onboarding {
+  gap: 22px;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.field-group > small {
+  font-size: 0.8rem;
+}
+
+/* tappable choice rows (school picker) */
+.pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--glass-edge);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick-row.on {
+  border-color: var(--lime);
+}
+
+.pick-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--on-lime);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.pick-check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.pick-row.on .pick-check {
+  border-color: var(--lime);
+  background: var(--lime);
+  color: var(--on-lime);
+}
+
+.skeleton-row {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* every dropdown: a dark pill with a lime chevron */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 52px;
+  padding: 0 40px 0 16px;
+  border-radius: 16px;
+  background-color: var(--tile);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6' fill='none' stroke='%23cdf54a' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+select option {
+  background: #121212;
+  color: var(--ink);
+}
+
+.dob-row {
+  display: grid;
+  grid-template-columns: 0.8fr 1fr 1.1fr;
+  gap: 8px;
+}
+
+.select-pill select {
+  width: 100%;
+  color: var(--muted);
+}
+
+.select-pill.set select {
+  color: var(--ink);
+  border-color: rgb(205 245 74 / 45%);
+}
+
+label.field-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.onboarding > .link {
+  align-self: flex-start;
+}

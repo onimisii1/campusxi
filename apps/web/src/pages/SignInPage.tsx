@@ -12,5 +12,5 @@ export default function SignInPage() {
     if (status === 'needs_profile') go('/profile')
   }, [status])
 
-  return <section><PageHeader title="Sign in" back="#/" /><SignIn onSignedIn={reload} /></section>
+  return <section><PageHeader title="" back="#/" action={<span />} /><SignIn onSignedIn={reload} /></section>
 }
