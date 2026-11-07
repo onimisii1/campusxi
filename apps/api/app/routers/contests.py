@@ -1,5 +1,6 @@
 """Contests (PRD 5.4, 8.4) and leaderboards (PRD F3). Paid entries hold the fee in the wallet
 until settlement (app/settlement.py); prizes are paid after the dispute hold (app/jobs.py)."""
+from collections import Counter
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
@@ -39,7 +40,8 @@ class EntryIn(BaseModel):
 ENTRIES_SQL = """
     select e.id, e.fantasy_team_id, e.user_id, e.final_points, e.final_rank, e.fee_kobo,
            e.late_after_event_id, e.late_elapsed_minutes,
-           t.label, t.late_after_event_id as team_after, t.late_elapsed_minutes as team_elapsed, u.team_name
+           t.label, t.late_after_event_id as team_after, t.late_elapsed_minutes as team_elapsed, u.team_name,
+           t.created_at as team_created_at
     from contest_entries e join fantasy_teams t on t.id = e.fantasy_team_id
     join users u on u.id = e.user_id where e.contest_id = %s order by e.joined_at, e.id
 """
@@ -253,11 +255,16 @@ def contest_leaderboard(contest_id: UUID, user=Depends(optional_user), conn=Depe
         scored = entry_points(conn, m, scorer, scores, entries)
         ranks = final_ranks(list(scored.items()))
         source = "live" if m["status"] in SCORED_STATUSES else "not_started"
-    rows = [{"rank": ranks[e["id"]], "entry_id": e["id"], "team_name": e["team_name"], "label": e["label"],
+    # Equal points share a rank and the next rank is skipped (1, 2, 2, 4); within a tie, the team that
+    # was put in first is listed first.
+    shared = Counter(ranks[e["id"]] for e in entries)
+    order = {e["id"]: (e["team_created_at"], i) for i, e in enumerate(entries)}
+    rows = [{"rank": ranks[e["id"]], "shared": shared[ranks[e["id"]]] > 1, "entry_id": e["id"],
+             "team_name": e["team_name"], "label": e["label"],
              "points": scored[e["id"]], "is_me": bool(user and e["user_id"] == user["id"]),
              "joined_minute": late_watermark((e["late_after_event_id"], e["late_elapsed_minutes"]),
                                              (e["team_after"], e["team_elapsed"]))[1]} for e in entries]
-    rows.sort(key=lambda r: (r["rank"], r["team_name"].lower(), r["label"]))
+    rows.sort(key=lambda r: (r["rank"], order[r["entry_id"]]))
     return {"contest_id": contest_id, "match_id": contest["match_id"], "name": contest["name"],
             "status": contest["status"], "source": source,
             "match_status": m["status"], "entries": rows}

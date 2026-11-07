@@ -3,6 +3,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
 
 from app.auth import current_user
 from app.clock import utcnow
@@ -13,7 +14,8 @@ from app.errors import ApiError
 from app.fantasy import snapshot_scores
 from app.live import official_or_primary_scorer, stream_scores
 from app.matches import assert_open, assert_open_or_late, load_match, squad
-from app.schemas import TeamIn
+from app.quick_pick import quick_pick
+from app.schemas import PickIn, TeamIn
 
 router = APIRouter(tags=["teams"])
 
@@ -60,6 +62,35 @@ def _team_out(conn, team_id) -> dict:
         (team_id,),
     ).fetchall()
     return team
+
+
+class QuickPickIn(BaseModel):
+    picks: list[PickIn] = Field(default_factory=list, max_length=20)   # picks so far, kept as they are
+    team_id: UUID | None = None                                       # editing this team: don't avoid it
+
+
+@router.post("/matches/{match_id}/quick-pick")
+def quick_pick_team(match_id: UUID, body: QuickPickIn, user=Depends(current_user), conn=Depends(get_conn),
+                    now=Depends(utcnow)):
+    """A valid random team (not saved) that keeps the player's picks so far and differs from every team
+    already saved for this match, by anyone. The builder shows it; the player saves it as usual."""
+    match = load_match(conn, match_id)
+    assert_open_or_late(conn, match, now)
+    members = [SquadAthlete(str(a["id"]), str(a["team_id"]), a["position"]) for a in squad(conn, match)]
+    lineup = {str(r["athlete_id"]): r["started"] for r in conn.execute(
+        "select athlete_id, started from match_lineups where match_id = %s", (match_id,)).fetchall()}
+    others = {}
+    for r in conn.execute("""select ft.id, p.athlete_id, p.role from fantasy_teams ft
+                             join fantasy_team_picks p on p.fantasy_team_id = ft.id
+                             where ft.match_id = %s and ft.id is distinct from %s""",
+                          (match_id, body.team_id)).fetchall():
+        others.setdefault(r["id"], []).append(Pick(str(r["athlete_id"]), r["role"]))
+    picks, unique = quick_pick(match["sport"], members, lineup,
+                               {str(p.athlete_id): p.role for p in body.picks}, list(others.values()))
+    if picks is None:
+        raise ApiError(422, "cant_complete", "your picks so far can't make a valid team: "
+                                             "remove a few and try Quick pick again")
+    return {"picks": [{"athlete_id": p.athlete_id, "role": p.role} for p in picks], "unique": unique}
 
 
 @router.post("/matches/{match_id}/teams", status_code=201)

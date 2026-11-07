@@ -1,5 +1,5 @@
 """Lobby reads (PRD 8.2): sports, schools, published tournaments and matches."""
-from collections import defaultdict
+from collections import Counter, defaultdict
 from decimal import Decimal
 from uuid import UUID
 
@@ -143,9 +143,19 @@ def season_leaderboard(tournament_id: UUID, user=Depends(optional_user), conn=De
     names = {r["id"]: r["team_name"] for r in conn.execute(
         "select id, team_name from users where id = any(%s)", (list(totals),)).fetchall()}
     ranks = final_ranks(list(totals.items()))
-    rows = [{"rank": ranks[uid], "team_name": names[uid], "points": pts, "matches": matches_played[uid],
-             "is_me": bool(user and uid == user["id"])} for uid, pts in totals.items()]
-    rows.sort(key=lambda r: (r["rank"], r["team_name"].lower()))
+    # Ties share a rank (1, 2, 2, 4); within a tie, whoever put their first team in this tournament
+    # in earliest is listed first.
+    first_in = {r["user_id"]: r["at"] for r in conn.execute(
+        """select f.user_id, min(f.created_at) as at from fantasy_teams f join matches m on m.id = f.match_id
+           where m.tournament_id = %s and f.user_id = any(%s) group by f.user_id""",
+        (tournament_id, list(totals))).fetchall()}
+    shared = Counter(ranks.values())
+    rows = [{"rank": ranks[uid], "shared": shared[ranks[uid]] > 1, "team_name": names[uid], "points": pts,
+             "matches": matches_played[uid], "is_me": bool(user and uid == user["id"]), "_first": first_in.get(uid)}
+            for uid, pts in totals.items()]
+    rows.sort(key=lambda r: (r["rank"], r["_first"] is None, r["_first"] or 0, r["team_name"].lower()))
+    for r in rows:
+        del r["_first"]
     return {"tournament_id": tournament_id, "name": t["name"], "sport": t["sport"],
             "matches_confirmed": len(confirmed), "entries": rows}
 

@@ -59,9 +59,24 @@ describe('quickPick', () => {
     expect(picks.has('home-GK-0') || picks.has('away-GK-0')).toBe(true)
   })
 
-  it('gives the captaincy to an attacker when none is set', () => {
-    const picks = quickPick(football, TEAM_RULES.football, new Map(), seeded(11))
-    const captain = [...picks].find(([, r]) => r === 'captain')![0]
-    expect(captain).toContain('FWD')
+  it('leans the captaincy towards attackers, but varies it', () => {
+    const captains = Array.from({ length: 40 }, (_, s) =>
+      [...quickPick(football, TEAM_RULES.football, new Map(), seeded(s + 1))].find(([, r]) => r === 'captain')![0])
+    expect(captains.filter((c) => c.includes('FWD') || c.includes('MID')).length).toBeGreaterThan(25)
+    expect(captains.some((c) => c.includes('GK'))).toBe(false)
+    expect(new Set(captains).size).toBeGreaterThan(5)
+  })
+
+  it('always fits a forward in when one side lists everyone as a midfielder (NUESA EEE v PGE)', () => {
+    const home: [string, number][] = [['GK', 1], ['DEF', 7], ['MID', 5], ['FWD', 5]]
+    const pool: Candidate[] = [
+      ...home.flatMap(([pos, n]) => Array.from({ length: n }, (_, i) => ({ id: `home-${pos}-${i}`, position: pos, side: 'home' as const, lineup: null }))),
+      ...Array.from({ length: 18 }, (_, i) => ({ id: `away-MID-${i}`, position: 'MID', side: 'away' as const, lineup: null })),
+    ]
+    for (let s = 1; s < 120; s++) {
+      const picks = quickPick(pool, TEAM_RULES.football, new Map(), seeded(s))
+      check('football', pool, picks)
+      expect([...picks.keys()].some((id) => id.includes('FWD'))).toBe(true)
+    }
   })
 })

@@ -143,10 +143,22 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
     }
   }
 
-  function autoFill() {
-    const next = quickPick(athletes, rules, picks)
-    setPicks(next)
-    toast(picks.size ? 'Team completed: tap any player to change' : 'Team picked for you: tap any player to change')
+  // Quick pick asks the server for a team that differs from everyone else's; offline, it's picked here.
+  async function autoFill() {
+    const done = picks.size ? 'Team completed: tap any player to change' : 'Team picked for you: tap any player to change'
+    try {
+      const res = await api<{ picks: { athlete_id: string; role: Role }[] }>(`/matches/${matchId}/quick-pick`, token, {
+        method: 'POST', body: { picks: [...picks].map(([athlete_id, role]) => ({ athlete_id, role })), team_id: teamId ?? null } })
+      setPicks(new Map(res.picks.map((p) => [p.athlete_id, p.role])))
+      toast(done)
+    } catch (e) {
+      if (e instanceof ApiError) {
+        toast(errorText(e), 'bad')
+        return
+      }
+      setPicks(quickPick(athletes, rules, picks))
+      toast(done)
+    }
   }
 
   // The open position tab: the one tapped, else the first position still short of its minimum.

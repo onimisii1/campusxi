@@ -10,7 +10,7 @@ import { useSession } from '../session'
 import { useToast } from '../toast'
 import { errorText, LIVE_REFRESH_MS, useApi } from '../useApi'
 
-type Entry = { rank: number; entry_id: string; team_name: string; label: string; points: number; is_me: boolean;
+type Entry = { rank: number; shared?: boolean; entry_id: string; team_name: string; label: string; points: number; is_me: boolean;
   joined_minute: number | null }
 type Board = { match_id: string; name: string; status: string; source: 'live' | 'final' | 'not_started'; entries: Entry[] }
 type Payout = {
@@ -83,7 +83,7 @@ export default function ContestBoard({ contestId }: { contestId: string }) {
               {board.source === 'live' && <UpdatedStamp at={updatedAt} stale={stale} />}</span>
             {board.source === 'live' && <button className="link" onClick={reloadBoard}>Refresh</button>}
           </div>
-          <Table rows={board.entries.map((e) => ({ key: e.entry_id, rank: e.rank, name: `${e.team_name} · ${e.label}`,
+          <Table rows={board.entries.map((e) => ({ key: e.entry_id, rank: e.rank, shared: e.shared, name: `${e.team_name} · ${e.label}`,
             points: e.points, me: e.is_me, note: e.joined_minute !== null ? `joined ${e.joined_minute}′` : undefined }))} />
         </>
       )}
@@ -203,7 +203,10 @@ function Entries({ board, contest, onChanged }: { board: Board; contest?: Contes
   )
 }
 
-export function Table({ rows }: { rows: { key: string; rank: number; name: string; points: number; me: boolean; note?: string }[] }) {
+/** Leaderboard. Equal points share a rank, shown "2=", and the next rank is skipped (1, 2=, 2=, 4). */
+export function Table({ rows }: {
+  rows: { key: string; rank: number; shared?: boolean; name: string; points: number; me: boolean; note?: string }[]
+}) {
   if (rows.length === 0) return <p className="muted">No entries yet.</p>
   return (
     <table className="board">
@@ -211,7 +214,7 @@ export function Table({ rows }: { rows: { key: string; rank: number; name: strin
       <tbody>
         {rows.map((r) => (
           <tr key={r.key} className={r.me ? 'me' : ''}>
-            <td>{r.rank}</td>
+            <td>{r.rank}{r.shared ? '=' : ''}</td>
             <td>{r.name}{r.note && <small className="muted"> {r.note}</small>}</td>
             <td>{points(r.points)}</td>
           </tr>
