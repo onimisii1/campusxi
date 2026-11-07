@@ -4936,3 +4936,193 @@ body::before {
   color: var(--lime);
   text-decoration: none;
 }
+
+/* =====================================================================
+   Design pass 4 (Nov 2026, Daniel): pure black, flat, one loud button per screen.
+   - The page is pure black with no glows or gradients, so the frosted glass reads cleanly.
+   - Colour gradients are gone (heroes, match backdrop, pitch shading, lime halos). Gradients that only
+     draw shapes stay: the joined cards' curve, ticket notches, pitch lines.
+   - Major actions are solid lime pills; secondary actions are text buttons; choices stay chips.
+   ===================================================================== */
+:root {
+  --page: #000;
+  --surface-solid: #121212;
+  --hero-a: var(--lime);
+  --hero-b: var(--lime);
+  --hero-c: var(--lime);
+}
+
+html,
+body {
+  background: #000;
+}
+
+body::before {
+  display: none;
+}
+
+/* flat surfaces: no lime halos, no colour fades */
+.event-card.lime,
+.balance-card,
+.glass-hero,
+.player-hero,
+.swipe-card.top,
+.swipe-promo-icon,
+.swipe-btn.take,
+.join-btn:not(:disabled),
+.primary:not(:disabled) {
+  box-shadow: none;
+}
+
+.match-hero:not(.has-photo) {
+  background: #000;
+}
+
+.match-hero:not(.has-photo)::after {
+  display: none;
+}
+
+.matched {
+  background: rgb(0 0 0 / 96%);
+}
+
+.pitch,
+.pitch.basketball,
+.pitch.volleyball {
+  background:
+    linear-gradient(rgb(205 245 74 / 22%), rgb(205 245 74 / 22%)) center 50% / 100% 1.5px no-repeat,
+    radial-gradient(circle at 50% 50%, transparent 54px, rgb(205 245 74 / 22%) 55px, rgb(205 245 74 / 22%) 56.5px, transparent 57.5px),
+    #0c0c0c;
+}
+
+.coin::before,
+.coin-dot {
+  background: #000;
+}
+
+/* major actions: solid lime, full width, bold */
+.primary,
+a.primary.as-button,
+.pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lime);
+  color: var(--on-lime);
+  font-weight: 700;
+  font-size: 1rem;
+  text-decoration: none;
+}
+
+.pill-btn {
+  min-height: 40px;
+  padding: 0 18px;
+}
+
+.primary:disabled {
+  background: var(--raised);
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* secondary actions: text buttons (no fill, no border) */
+.sheet-btn,
+.ghost-btn,
+.action-pill,
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: var(--lime);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sheet-btn,
+.share-btn {
+  width: auto;
+}
+
+.sheet-btn:active,
+.ghost-btn:active,
+.action-pill:active,
+.share-btn:active {
+  background: rgb(255 255 255 / 6%);
+}
+
+.sheet-btn.danger {
+  color: var(--bad);
+}
+
+.ghost-btn:disabled,
+.sheet-btn:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.ghost-btn.icon {
+  width: 40px;
+  color: var(--muted);
+}
+
+/* a row of text actions reads as one line, split by thin dots */
+.action-row {
+  gap: 2px;
+}
+
+.action-row .action-pill + .action-pill::before,
+.link-pair .action-pill + .action-pill::before {
+  content: '·';
+  margin-right: 8px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* selection lists inside sheets stay as tappable rows (they're choices, not actions) */
+.team-options .sheet-btn,
+.join-list .sheet-btn {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.team-options .sheet-btn.on {
+  border-color: var(--lime);
+}
+
+/* sticky bars sit over scrolling content: frosted but solid enough to read */
+.save-bar,
+.counters {
+  z-index: 5;
+  background: rgb(0 0 0 / 88%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.balance-card.glass-hero {
+  box-shadow: none;
+}
+
+.link-pair {
+  justify-content: center;
+  gap: 4px;
+}
+
+.link-pair .action-pill {
+  flex: none;
+}
