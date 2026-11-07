@@ -33,8 +33,8 @@ export type Wallet = {
 export function paidGate(w: Wallet): { href: string; text: string } | null {
   if (w.can_play_paid) return null
   return w.kyc_required
-    ? { href: '#/verify', text: '🪪 Verify your ID to play for cash →' }
-    : { href: '#/wallet', text: "Confirm you're 18+ in your wallet to play for cash →" }
+    ? { href: '#/verify', text: 'Verify ID to play for cash →' }
+    : { href: '#/wallet', text: 'Set up cash play →' }
 }
 
 export function naira(kobo: number): string {

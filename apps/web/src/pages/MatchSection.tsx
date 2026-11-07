@@ -60,8 +60,8 @@ export default function MatchSection({ matchId, section, focus }: { matchId: str
   return (
     <section>
       <PageHeader title={section === 'teams' && match.locked ? 'My teams' : SECTIONS[section]} back={`#/match/${matchId}`}
-        subtitle={`${match.home_team.name} ${match.score?.walkover ? 'v (walkover, voided)' : match.score ? `${match.score.home}–${match.score.away}` : 'vs'} ${
-          match.away_team.name} · ${match.locked ? statusLabel(match.status) : `Deadline ${kickoff(match.scheduled_start)}`}`} />
+        subtitle={`${match.home_team.name} ${match.score?.walkover ? 'v (walkover)' : match.score ? `${match.score.home}–${match.score.away}` : 'v'} ${
+          match.away_team.name} · ${match.locked ? statusLabel(match.status) : kickoff(match.scheduled_start)}`} />
       {section === 'contests' && <ContestsTab match={match} />}
       {section === 'teams' && <TeamsTab match={match} focus={focus} />}
       {section === 'live' && <LiveTab match={match} />}
@@ -297,7 +297,6 @@ function ChallengesTab({ match }: { match: Match }) {
   const { data: w, reload: reloadWallet } = useWallet()
   const [team, setTeam] = useState('')
   const [stake, setStake] = useState(0)
-  const [direct, setDirect] = useState(false)
   const [link, setLink] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [side, setSide] = useState<'home' | 'away' | null>(null)
@@ -313,14 +312,22 @@ function ChallengesTab({ match }: { match: Match }) {
   const afford = (amount: number) => !amount || (w ? split(w, amount).short === 0 : false)
   const winFor = (amount: number) => 2 * amount - amount / 10
 
-  async function create() {
+  // "Post challenge" puts it on the open board; "Share link" makes a private one and opens the share sheet.
+  async function create(direct: boolean) {
     try {
       const bet = await api<{ invite_path: string }>('/bets', token, {
         method: 'POST', idempotencyKey: newIdempotencyKey(),
         body: { match_id: match.id, fantasy_team_id: team, stake_kobo: stake, visibility: direct ? 'direct' : 'board' } })
-      setLink(`${window.location.origin}${window.location.pathname}${bet.invite_path}`)
+      const url = `${window.location.origin}${window.location.pathname}${bet.invite_path}`
+      setLink(url)
       setMsg(null)
-      toast(direct ? 'Challenge created: share the link' : 'Challenge posted on the board')
+      if (direct && navigator.share) {
+        navigator.share({ title: 'CampusXI challenge', text: `Beat my team: ${match.home_team.name} v ${match.away_team.name}`, url })
+          .catch(() => {})
+      } else if (direct) {
+        navigator.clipboard?.writeText(url).catch(() => {})
+      }
+      toast(direct ? 'Challenge link ready: send it to a friend' : 'Challenge posted on the board')
       refresh()
     } catch (e) {
       setMsg(errorText(e))
@@ -370,20 +377,18 @@ function ChallengesTab({ match }: { match: Match }) {
 
   return (
     <div>
-      <p className="muted">Head-to-head: your team against someone else's, {paid
-        ? 'for bragging rights or a stake (10% commission on winnings).' : 'for bragging rights.'}</p>
       {status === 'signed_out' && <NeedSignIn what="challenge other fans" />}
-      {status === 'ready' && gate && <a className="notice block-link" href={gate.href}>{gate.text}</a>}
+      {status === 'ready' && gate && <a className="small block-link gate-link" href={gate.href}>{gate.text}</a>}
       {status === 'ready' && !match.locked && (
         <a className="swipe-promo" href={`#/swipe/${match.id}`}>
-          <span><b>Swipe to match</b><small>Flick through this match's open challenges</small></span>
+          <span><b>Swipe to match</b><small>Your team vs another fan's</small></span>
           <span className="swipe-promo-icon" aria-hidden>⚡</span>
         </a>
       )}
       {status === 'ready' && !match.locked && (
         teams && teams.length > 0 ? (
           <div className="glass-card">
-            <label>Your team for challenges<TeamPicker teams={teams} value={team} onChange={setTeam} /></label>
+            <TeamPicker teams={teams} value={team} onChange={setTeam} />
             {paid && (
               <div className="chip-row" role="group" aria-label="Stake">
                 {STAKES.map((s) => (
@@ -391,11 +396,13 @@ function ChallengesTab({ match }: { match: Match }) {
                 ))}
               </div>
             )}
-            {stake > 0 && w && <p className="small muted">Win {naira(winFor(stake))} · pays {payLine(w, stake)}</p>}
-            <label className="inline"><input type="checkbox" checked={direct} onChange={(e) => setDirect(e.target.checked)} />
-              Link only (don't post on the open board)</label>
-            <button className="primary" disabled={!team || !afford(stake)} onClick={create}>
-              {afford(stake) ? 'Create challenge' : 'Not enough in your wallet'}</button>
+            {stake > 0 && w && <p className="small muted">Win {naira(winFor(stake))} (10% fee) · pays {payLine(w, stake)}</p>}
+            {afford(stake) ? (
+              <div className="inline-form">
+                <button className="primary" disabled={!team} onClick={() => create(false)}>Post challenge</button>
+                <button className="ghost-btn" disabled={!team} onClick={() => create(true)}>Share link</button>
+              </div>
+            ) : <a className="primary as-button" href="#/wallet">Add money to stake {naira(stake)}</a>}
             {link && (
               <p className="small">Share this link: <code>{link}</code>{' '}
                 <button className="link" onClick={() => navigator.clipboard?.writeText(link)}>Copy</button></p>

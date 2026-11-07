@@ -184,18 +184,15 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
   return (
     <section className="pick-team">
       <PageHeader title={teamId ? 'Edit team' : lateBuild ? 'Late team' : 'Pick Team'} back={back}
-        subtitle={`${match.home_team.name} vs ${match.away_team.name} · ${lateBuild
-          ? `late joining until minute ${match.late_join_until}` : `Deadline ${deadline(match.scheduled_start)}`}`} />
-      {lateBuild && (
-        <p className="notice small">⏱ The match is on. This team only earns points recorded after you save it, and it
-          can't be edited afterwards.</p>
-      )}
+        subtitle={`${match.home_team.name} v ${match.away_team.name} · ${lateBuild
+          ? `late until ${match.late_join_until}′` : deadline(match.scheduled_start)}`} />
+      {lateBuild && <p className="notice small">⏱ Points count from when you save; no edits after.</p>}
 
-      <div className="chip-row" aria-live="polite">
-        <span className={`chip ${chosen.length === rules.size ? 'ok' : ''}`}>{chosen.length}/{rules.size} players</span>
-        <span className={`chip ${rolesSet === 3 ? 'ok' : ''}`}>C · VC · K {rolesSet}/3</span>
-        <span className="chip">{teamCode(match.home_team.name)} {sideCount('home')}/{rules.maxPerSide}</span>
-        <span className="chip">{teamCode(match.away_team.name)} {sideCount('away')}/{rules.maxPerSide}</span>
+      <div className="count-strip" aria-live="polite">
+        <span className={chosen.length === rules.size ? 'ok' : ''}><b>{chosen.length}</b>/{rules.size}</span>
+        <span className={rolesSet === 3 ? 'ok' : ''}>C·VC·K <b>{rolesSet}</b>/3</span>
+        <span>{teamCode(match.home_team.name)} <b>{sideCount('home')}</b>/{rules.maxPerSide}</span>
+        <span>{teamCode(match.away_team.name)} <b>{sideCount('away')}</b>/{rules.maxPerSide}</span>
       </div>
 
       <div className="row between toolbar">
@@ -204,7 +201,8 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
           <button role="tab" aria-selected={view === 'list'} className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>List</button>
         </div>
         <div className="row">
-          {picks.size > 0 && <button className="ghost-btn" onClick={() => setPicks(new Map())}>Clear</button>}
+          {picks.size > 0 && <button className="ghost-btn icon" onClick={() => setPicks(new Map())} aria-label="Clear team"
+            title="Clear team">↺</button>}
           {(!full || rolesSet < 3) && <button className="ghost-btn accent" onClick={autoFill}>⚡ Quick pick</button>}
         </div>
       </div>
@@ -292,12 +290,12 @@ export default function PickTeam({ matchId, teamId }: { matchId: string; teamId?
           </div>
         ) : (
         <>
-        <input className="search" type="search" placeholder="Search players or teams" value={search}
-          onChange={(e) => setSearch(e.target.value)} aria-label="Search players" />
-        <div className="chip-row">
+        <div className="pool-filters">
+          <input className="search" type="search" placeholder="Search" value={search}
+            onChange={(e) => setSearch(e.target.value)} aria-label="Search players" />
           {(['all', 'home', 'away'] as const).map((s) => (
             <button key={s} className={`chip ${sideFilter === s ? 'on' : ''}`} onClick={() => setSideFilter(s)}>
-              {s === 'all' ? 'Both sides' : s === 'home' ? match.home_team.name : match.away_team.name}
+              {s === 'all' ? 'All' : teamCode(s === 'home' ? match.home_team.name : match.away_team.name)}
             </button>
           ))}
         </div>

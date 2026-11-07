@@ -54,12 +54,10 @@ export default function WalletPage() {
         verified={w.kyc_required ? w.kyc_status === 'verified' : !!w.legal_name}
         legalName={w.kyc_required ? null : w.legal_name} onDone={reload} />}
       {tab === 'History' && <History />}
-      <ul className="menu-list">
-        <li><a href="#/refer">Invite friends, earn coins <span aria-hidden>→</span></a></li>
-        <li><a href="#/limits">Limits and breaks <span aria-hidden>→</span></a></li>
-      </ul>
-      <p className="muted small">Coins come from referrals: they can pay up to half of an entry or stake, can't be withdrawn,
-        and anything you win with them is paid in cash.</p>
+      <div className="link-pair">
+        <a className="action-pill" href="#/refer">Invite friends</a>
+        <a className="action-pill" href="#/limits">Limits</a>
+      </div>
     </section>
   )
 }
@@ -83,37 +81,32 @@ function StartChecks({ w, onDone }: { w: Wallet; onDone: () => void }) {
   if (w.adult_confirmed && w.legal_name && !editing) {
     return (
       <div className="glass-card row between start-checks done">
-        <span className="small"><span className="muted">Bank accounts must be in the name</span><b className="block">{w.legal_name}</b></span>
-        {w.legal_name_locked
-          ? <span className="small muted">Locked · ask support to change</span>
-          : <button className="link" onClick={() => setEditing(true)}>Change</button>}
+        <span className="small"><span className="muted">Bank name</span> <b>{w.legal_name}</b></span>
+        {!w.legal_name_locked && <button className="link" onClick={() => setEditing(true)}>Change</button>}
       </div>
     )
   }
+  // One form, one button: the 18+ tick and the bank-account name are saved together.
+  const needAdult = !w.adult_confirmed
+  const needName = editing || !w.legal_name
+  const nameOk = name.trim().split(/\s+/).length >= 2
   return (
     <div className="glass-card start-checks">
-      <strong>Before you play for cash</strong>
-      {!w.adult_confirmed && (
-        <>
-          <label className="inline"><input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} />
-            I'm 18 or older, and I'll only play with my own money</label>
-          <button className="primary" disabled={!ticked}
-            onClick={() => run(() => api('/me/confirm-18', token, { method: 'POST', body: { confirm: true } }), 'Thanks: paid play is open')}>
-            Confirm</button>
-        </>
+      <strong>Play for cash</strong>
+      {needName && (
+        <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name"
+          placeholder="Full name, as on your bank account" aria-label="Full name, as on your bank account" />
       )}
-      {(editing || !w.legal_name) && (
-        <>
-          <label>Full name, as on your bank account
-            <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="e.g. Chioma Ada Obi" /></label>
-          <p className="muted small">Withdrawals only go to a bank account in this name that you've paid in from.</p>
-          <button className="sheet-btn" disabled={name.trim().split(/\s+/).length < 2}
-            onClick={() => run(async () => {
-              await api('/me/legal-name', token, { method: 'PUT', body: { legal_name: name } })
-              setEditing(false)
-            }, 'Name saved')}>Save name</button>
-        </>
+      {needAdult && (
+        <label className="inline small"><input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} />
+          I'm 18+ and play with my own money</label>
       )}
+      <button className="primary" disabled={(needAdult && !ticked) || (needName && !nameOk)}
+        onClick={() => run(async () => {
+          if (needAdult) await api('/me/confirm-18', token, { method: 'POST', body: { confirm: true } })
+          if (needName) await api('/me/legal-name', token, { method: 'PUT', body: { legal_name: name } })
+          setEditing(false)
+        }, 'Saved: paid play is open')}>Save</button>
     </div>
   )
 }
@@ -146,14 +139,14 @@ function Deposit({ minimum, disabled, transferOnly }: { minimum: number; disable
             {naira(c)}</button>
         ))}
       </div>
-      <label>Or enter an amount (₦)
-        <input inputMode="numeric" value={amount / 100} onChange={(e) => { setAmount(Math.round(Number(e.target.value || 0) * 100)); key.current = newIdempotencyKey() }} />
-      </label>
-      <button className="primary" disabled={disabled || busy || amount < minimum} onClick={go}>
-        {busy ? 'Opening checkout…' : `Add ${naira(amount)}`}</button>
-      <p className="muted small">{transferOnly
-        ? <>Bank transfer only for now: pay from <b>your own</b> bank account. That's the account your winnings go back to.</>
-        : 'Card, bank transfer or USSD through Paystack (Flutterwave if Paystack is down).'} Minimum {naira(minimum)}.</p>
+      <div className="inline-form">
+        <input inputMode="numeric" value={amount / 100} aria-label="Amount in naira" placeholder="Other amount (₦)"
+          onChange={(e) => { setAmount(Math.round(Number(e.target.value || 0) * 100)); key.current = newIdempotencyKey() }} />
+        <button className="primary" disabled={disabled || busy || amount < minimum} onClick={go}>
+          {busy ? 'Opening…' : `Add ${naira(amount)}`}</button>
+      </div>
+      <p className="muted small">{transferOnly ? 'Bank transfer from your own account: winnings go back there.'
+        : 'Card, transfer or USSD.'} Min {naira(minimum)}.</p>
     </div>
   )
 }
@@ -187,13 +180,10 @@ function Withdraw({ cash, minimum, verified, legalName, onDone }: {
   }
 
   if (!verified) {
-    return <p className="muted">{legalName === null && 'Verify your ID first: withdrawals go only to an account in your own name.'}
-      {legalName !== null && 'Add your full name above first: withdrawals go only to an account in that name.'}</p>
+    return <p className="muted">{legalName === null ? 'Verify your ID first.' : 'Save your bank name above first.'}</p>
   }
   return (
     <div>
-      {legalName && <p className="small muted">Winnings go back only to a bank account in the name <b>{legalName}</b> that
-        you've paid in from by bank transfer.</p>}
       <div className="glass-card">
         {accounts?.length ? (
           <label>To

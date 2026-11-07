@@ -23,14 +23,13 @@ export default function ContestCard({ contest: c, matchId, teams, onChanged }: {
           <strong className="contest-name">{c.name}</strong>
           {c.status !== 'open' && <span className="badge">{c.status}</span>}
         </div>
-        <p className="contest-prize">{c.prize_text ? `🏆 ${c.prize_text}` : c.entry_fee_kobo === 0 ? 'Free to play' : 'Cash prizes'}</p>
+        {(c.prize_text || c.entry_fee_kobo > 0) && (
+          <p className="contest-prize">{c.prize_text ? `🏆 ${c.prize_text}` : 'Cash prizes'}</p>
+        )}
         <div className="progress" aria-label={`${c.entries} of ${c.capacity} spots taken`}>
           <span style={{ width: `${Math.max(filled, c.entries ? 2 : 0)}%` }} />
         </div>
-        <div className="row between small muted">
-          <span>{c.spots_left.toLocaleString()} spots left</span>
-          <span>{c.capacity.toLocaleString()} spots</span>
-        </div>
+        <p className="small muted spots-line">{c.spots_left.toLocaleString()} of {c.capacity.toLocaleString()} spots left</p>
       </a>
       <div className="fact-strip">
         <span title="Ranks that win">🏅 {c.entry_fee_kobo ? `${paidRanks} ranks` : 'Top 40%'}</span>

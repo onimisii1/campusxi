@@ -174,9 +174,9 @@ export default function MatchCard({ match }: { match: MatchCardData }) {
       <span className="sheet-handle" aria-hidden />
       <a className="panel-league" href={`#/tournament/${match.tournament_id}`}>
         <span className="league-logo" aria-hidden>{match.sport === 'basketball' ? '🏀' : match.sport === 'volleyball' ? '🏐' : '⚽'}</span>
-        <span><strong>{match.tournament}</strong><small className="muted block">{label(match)}{match.venue ? ` · ${match.venue}` : ''}</small></span>
+        <span><strong>{match.tournament}</strong><small className="muted block">{label(match)}</small></span>
       </a>
-      <div className="panel-teams">
+      {match.score && <div className="panel-teams">
         <span className="panel-team"><TeamBadge name={match.home_team.name} colour={match.home_team.colour} logo={match.home_team.logo} />
           {match.score && !match.score.walkover && <b className="score-bubble">{match.score.home}</b>}
           <span>{match.home_team.name}</span></span>
@@ -184,18 +184,20 @@ export default function MatchCard({ match }: { match: MatchCardData }) {
         <span className="panel-team"><TeamBadge name={match.away_team.name} colour={match.away_team.colour} logo={match.away_team.logo} />
           {match.score && !match.score.walkover && <b className="score-bubble">{match.score.away}</b>}
           <span>{match.away_team.name}</span></span>
-      </div>
+      </div>}
       <div className="clock">
         <span className="clock-time">{clock.text}</span>
-        {total > 0 && <span className="clock-total muted small">{total}′</span>}
+        <span className="clock-total muted small">{match.locked
+          ? (total > 0 ? `${total}′` : '')
+          : `${deadline(match.scheduled_start)}${match.lineup_out ? ' · line-up out' : ''}`}</span>
       </div>
       <div className="track" aria-hidden><span style={{ width: `${progress}%` }} /><i style={{ left: `${progress}%` }} /></div>
-      <p className="panel-note small muted">
-        {match.locked
-          ? <>{match.late_join_until != null ? `⏱ Late joining open until ${match.late_join_until}′` : phase(match)}
-            {live && <> · <UpdatedStamp at={updatedAt} stale={stale} /></>}</>
-          : <>Deadline {deadline(match.scheduled_start)}{match.lineup_out ? ' · Line-up out' : ''}</>}
-      </p>
+      {(match.late_join_until != null || live) && (
+        <p className="panel-note small muted">
+          {match.late_join_until != null ? `⏱ Late joining open until ${match.late_join_until}′` : phase(match)}
+          {live && <> · <UpdatedStamp at={updatedAt} stale={stale} /></>}
+        </p>
+      )}
       <div className="odds">
         <div><small>{started ? 'Average' : 'Fans in'}</small><b>{started ? points(s!.average) : (s?.players ?? '–')}</b></div>
         <div><small>{started ? 'Highest' : 'Teams built'}</small><b>{started ? points(s!.highest) : (s?.teams ?? '–')}</b></div>
@@ -203,10 +205,11 @@ export default function MatchCard({ match }: { match: MatchCardData }) {
           <b>{started ? (s!.my_points === null ? '–' : points(s!.my_points)) : (s?.my_teams ?? 0)}</b></div>
       </div>
       <nav className="actions">
-        <a className="primary as-button" href={`${base}/teams`}>{match.locked ? 'My teams' : (s?.my_teams ? 'Pick Team' : 'Pick your team')}</a>
-        <a className="action-pill" href={`${base}/contests`}>{match.late_join_until != null ? 'Join late' : 'Contests'}</a>
-        <a className="action-pill" href={`${base}/challenges`}>Challenges</a>
-        {match.locked && <a className="action-pill" href={`${base}/live`}>Live points</a>}
+        <a className="primary as-button" href={`${base}/teams`}>{match.locked ? 'My teams' : 'Pick team'}</a>
+        <span className="action-row">
+          <a className="action-pill" href={`${base}/contests`}>{match.late_join_until != null ? 'Join late' : 'Contests'}</a>
+          <a className="action-pill" href={`${base}/challenges`}>Challenges</a>
+        </span>
       </nav>
     </article>
   )

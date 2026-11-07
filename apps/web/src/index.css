@@ -4798,3 +4798,141 @@ body::before {
   color: var(--on-lime);
   filter: none;
 }
+
+/* ---------- compact pass: fewer words, merged controls ---------- */
+/* match card: one action row (Pick team grows, the rest are equal pills) */
+.panel .actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.panel .actions .primary {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.action-row .action-pill {
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
+.clock {
+  align-items: baseline;
+}
+
+/* Pick Team: one slim counter strip instead of four chips */
+.count-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 4px 0 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--glass-edge);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.count-strip b {
+  color: var(--ink);
+}
+
+.count-strip .ok,
+.count-strip .ok b {
+  color: var(--lime);
+}
+
+.ghost-btn.icon {
+  width: 40px;
+  padding: 0;
+  font-size: 1.1rem;
+}
+
+/* text field + button on one line */
+.inline-form {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-top: 10px;
+}
+
+.inline-form > input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.inline-form > .primary,
+.inline-form > .ghost-btn {
+  flex: none;
+  width: auto;
+  margin: 0;
+  padding-inline: 18px;
+  white-space: nowrap;
+}
+
+.inline-form > .primary:only-child,
+.inline-form > .primary:first-child:not(:only-child) {
+  flex: 1;
+}
+
+/* wallet: two small links instead of a menu card and a paragraph */
+.link-pair {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.link-pair .action-pill {
+  flex: 1;
+  text-align: center;
+}
+
+.start-checks > input {
+  margin: 0;
+}
+
+.spots-line {
+  margin: 6px 0 0;
+}
+
+.pool-filters {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.pool-filters .search {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.pool-filters .chip {
+  flex: none;
+  padding-inline: 12px;
+}
+
+.gate-link {
+  display: inline-block;
+  margin: 0 0 10px;
+  color: var(--lime);
+  text-decoration: none;
+}
