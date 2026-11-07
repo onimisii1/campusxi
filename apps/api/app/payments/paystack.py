@@ -39,7 +39,10 @@ class Paystack:
         status = {"success": "success", "failed": "failed", "abandoned": "failed", "reversed": "reversed"}.get(
             data.get("status"), "pending")
         auth = data.get("authorization") or {}       # Pay with Transfer: sender_name / sender_bank / sender_bank_account_number
-        return Payment(status, int(data.get("amount") or 0), data.get("channel"), int(data.get("fees") or 0),
+        # When the account passes Paystack's fee to the customer, `amount` is what they paid (deposit + fee) and
+        # `requested_amount` is the deposit we asked for, which is what the wallet is credited with.
+        amount = int(data.get("requested_amount") or data.get("amount") or 0)
+        return Payment(status, amount, data.get("channel"), int(data.get("fees") or 0),
                        auth.get("sender_name") or auth.get("account_name"), auth.get("sender_bank"),
                        auth.get("sender_bank_account_number"))
 

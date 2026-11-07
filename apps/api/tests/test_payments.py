@@ -35,7 +35,8 @@ class FakePSPs:
                 return ok_ps({"authorization_url": f"https://checkout.paystack.com/{body['reference']}"})
             if path.startswith("/transaction/verify/"):
                 t = self.txns[path.rsplit("/", 1)[1]]
-                return ok_ps({"status": t["status"], "amount": t["amount"], "channel": t.get("channel", "card"),
+                return ok_ps({"status": t["status"], "amount": t["amount"], "requested_amount": t.get("requested_amount"),
+                              "channel": t.get("channel", "card"),
                               "fees": 150, "authorization": t.get("authorization", {})})
             if path == "/bank":
                 return ok_ps([{"code": "058", "name": "GTBank"}, {"code": "044", "name": "Access Bank"}])
@@ -120,6 +121,16 @@ def test_amount_mismatch_is_not_credited(psp, client, db):
     psp.txns[d["reference"]] = {"status": "success", "amount": 100}                 # paid N1 for a N5,000 deposit
     assert client.get(f"/wallet/deposits/{d['reference']}", headers=auth(u)).json()["status"] == "failed"
     assert client.get("/me/wallet", headers=auth(u)).json()["cash_kobo"] == 0
+
+
+def test_fee_paid_by_the_customer_still_credits_the_deposit(psp, client, db):
+    """Live 7 Nov: with 'customer pays the fee', Paystack reported amount 101,500 for a N1,000 deposit."""
+    u = _player(db, client)
+    d = client.post("/wallet/deposits", headers=auth(u), json={"amount_kobo": 100_000}).json()
+    psp.txns[d["reference"]] = {"status": "success", "amount": 101_500, "requested_amount": 100_000}
+    assert client.get(f"/wallet/deposits/{d['reference']}", headers=auth(u)).json()["status"] == "success"
+    assert client.get("/me/wallet", headers=auth(u)).json()["cash_kobo"] == 100_000
+    _check(db)
 
 
 def test_flutterwave_fallback_and_its_webhook(psp, client, db):
