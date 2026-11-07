@@ -26,17 +26,22 @@ class Paystack:
             raise ProviderError(f"paystack {path}: {body.get('message', res.status_code)}")
         return body["data"]
 
-    def init_deposit(self, reference: str, amount_kobo: int, email: str, callback_url: str) -> Checkout:
+    def init_deposit(self, reference: str, amount_kobo: int, email: str, callback_url: str,
+                     bank_transfer_only: bool = False) -> Checkout:
+        channels = ["bank_transfer"] if bank_transfer_only else ["card", "bank", "ussd", "bank_transfer"]
         data = self._call("POST", "/transaction/initialize", json={
             "reference": reference, "amount": amount_kobo, "email": email, "currency": "NGN",
-            "callback_url": callback_url, "channels": ["card", "bank", "ussd", "bank_transfer"]})
+            "callback_url": callback_url, "channels": channels})
         return Checkout(self.name, reference, data["authorization_url"])
 
     def verify(self, reference: str) -> Payment:
         data = self._call("GET", f"/transaction/verify/{reference}")
         status = {"success": "success", "failed": "failed", "abandoned": "failed", "reversed": "failed"}.get(
             data.get("status"), "pending")
-        return Payment(status, int(data.get("amount") or 0), data.get("channel"), int(data.get("fees") or 0))
+        auth = data.get("authorization") or {}       # Pay with Transfer: sender_name / sender_bank / sender_bank_account_number
+        return Payment(status, int(data.get("amount") or 0), data.get("channel"), int(data.get("fees") or 0),
+                       auth.get("sender_name") or auth.get("account_name"), auth.get("sender_bank"),
+                       auth.get("sender_bank_account_number"))
 
     def parse_webhook(self, raw: bytes, headers) -> WebhookEvent:
         expected = hmac.new(self.secret.encode(), raw, hashlib.sha512).hexdigest()

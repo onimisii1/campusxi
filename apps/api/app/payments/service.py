@@ -27,7 +27,8 @@ def start_deposit(conn, user: dict, amount: int, email: str | None, now) -> dict
     for p in providers:
         try:
             checkout = p.init_deposit(ref, amount, email or f"{user['id']}@players.campusxi.app",
-                                      f"{settings.public_app_url}/#/wallet/deposit/{ref}")
+                                      f"{settings.public_app_url}/#/wallet/deposit/{ref}",
+                                      bank_transfer_only=not settings.kyc_required)
         except ProviderError as e:
             errors.append(str(e))
             continue
@@ -55,8 +56,10 @@ def settle_deposit(conn, reference: str, now) -> dict:
     if payment.status == "success" and payment.amount_kobo == d["amount_kobo"]:
         wallet.credit_deposit(conn, d["user_id"], d["amount_kobo"], d["provider"], d["id"])
         d = conn.execute("""update deposits set status = 'success', credited_at = %s, channel = %s, fee_kobo = %s,
+                            payer_name = %s, payer_bank = %s, payer_account_tail = %s,
                             updated_at = %s where id = %s returning *""",
-                         (now, payment.channel, payment.fee_kobo, now, d["id"])).fetchone()
+                         (now, payment.channel, payment.fee_kobo, (payment.payer_name or "").strip() or None,
+                          payment.payer_bank, account_tail(payment.payer_account), now, d["id"])).fetchone()
         audit(conn, None, "deposit.credit", "deposit", d["id"], amount_kobo=d["amount_kobo"])
         maybe_reward(conn, d["user_id"], now)
     elif payment.status == "failed" or (payment.status == "success" and payment.amount_kobo != d["amount_kobo"]):
@@ -75,11 +78,46 @@ def name_matches(account_name: str, kyc_name: str | None) -> bool:
     return len(a & b) >= min(2, len(b))
 
 
-def add_bank_account(conn, user: dict, bank_code: str, account_number: str) -> dict:
+def account_tail(account: str | None) -> str | None:
+    """Last four digits of an account number, masked ("XXXXXX6789") or not."""
+    digits = "".join(ch for ch in (account or "") if ch.isdigit())
+    return digits[-4:] if len(digits) >= 4 else None
+
+
+def _words(s: str | None) -> set:
+    return {w for w in (s or "").upper().replace(",", " ").replace(".", " ").split()
+            if len(w) > 1 and w not in ("BANK", "PLC", "LIMITED", "LTD", "NIGERIA", "MFB", "OF", "THE")}
+
+
+def funding_deposit(conn, user_id, account_number: str, account_name: str) -> dict | None:
+    """The newest successful deposit this bank account paid in (same last four digits, same holder name)."""
+    rows = conn.execute("""select * from deposits where user_id = %s and status = 'success' and payer_account_tail = %s
+                           order by created_at desc""", (user_id, account_tail(account_number))).fetchall()
+    return next((d for d in rows if d["payer_name"] and name_matches(account_name, d["payer_name"])), None)
+
+
+def same_bank(a: str | None, b: str | None) -> bool:
+    """Loose: provider bank names differ ("GTBank" vs "Guaranty Trust Bank"); unknown counts as a mismatch."""
+    wa, wb = _words(a), _words(b)
+    return bool(wa & wb) or bool(a and b and (a.upper() in b.upper() or b.upper() in a.upper()))
+
+
+def holder_name(conn, user: dict) -> tuple:
+    """(name a bank account must be in, where it comes from). Verified ID wins; without KYC, the
+    full name the player gave on their profile."""
     kyc = conn.execute("""select verified_name from kyc_records where user_id = %s and status = 'verified'
                           order by created_at desc limit 1""", (user["id"],)).fetchone()
-    if user["kyc_status"] != "verified" or kyc is None:
+    if user["kyc_status"] == "verified" and kyc:
+        return kyc["verified_name"], "ID"
+    if settings.kyc_required:
         raise ApiError(403, "kyc_required", "verify your ID before adding a bank account")
+    if not user.get("legal_name"):
+        raise ApiError(403, "legal_name_required", "add your full name, as on your bank account, first")
+    return user["legal_name"], "CampusXI account"
+
+
+def add_bank_account(conn, user: dict, bank_code: str, account_number: str) -> dict:
+    expected, source = holder_name(conn, user)
     name, bank_name, errors = None, bank_code, []
     for p in configured():
         try:
@@ -90,8 +128,11 @@ def add_bank_account(conn, user: dict, bank_code: str, account_number: str) -> d
             errors.append(str(e))
     if name is None:
         raise ApiError(422, "account_not_found", "we couldn't find that account; check the number and bank", errors)
-    if not name_matches(name, kyc["verified_name"]):
-        raise ApiError(422, "name_mismatch", f"the account is in the name {name}, which doesn't match your ID")
+    if not name_matches(name, expected):
+        raise ApiError(422, "name_mismatch", f"the account is in the name {name}, which doesn't match your {source}")
+    if not settings.kyc_required and funding_deposit(conn, user["id"], account_number, name) is None:
+        raise ApiError(422, "not_funding_account", "withdrawals only go back to an account you've paid in from: "
+                                                   "deposit from this account by bank transfer first")
     row = conn.execute(
         """insert into bank_accounts (user_id, bank_code, bank_name, account_number, account_name)
            values (%s, %s, %s, %s, %s) on conflict (user_id, bank_code, account_number)
@@ -103,7 +144,7 @@ def add_bank_account(conn, user: dict, bank_code: str, account_number: str) -> d
 
 
 def request_withdrawal(conn, user: dict, amount: int, bank_account_id, now) -> dict:
-    if user["kyc_status"] != "verified":
+    if settings.kyc_required and user["kyc_status"] != "verified":
         raise ApiError(403, "kyc_required", "verify your ID first")
     if amount < settings.min_withdrawal_kobo:
         raise ApiError(422, "below_minimum", f"the smallest withdrawal is ₦{settings.min_withdrawal_kobo / 100:,.0f}")
@@ -114,6 +155,11 @@ def request_withdrawal(conn, user: dict, amount: int, bank_account_id, now) -> d
     first = not conn.execute("select 1 from withdrawals where user_id = %s and status = 'paid'",
                              (user["id"],)).fetchone()
     approval = first or amount > settings.withdrawal_approval_over_kobo
+    if not settings.kyc_required:
+        funded = funding_deposit(conn, user["id"], account["account_number"], account["account_name"])
+        if funded is None:
+            raise ApiError(422, "not_funding_account", "withdrawals only go back to an account you've paid in from")
+        approval = approval or not same_bank(funded["payer_bank"], account["bank_name"])   # an admin compares
     w = conn.execute(
         """insert into withdrawals (user_id, amount_kobo, psp_reference, bank_account_id, status, needs_approval,
                                   created_at, updated_at)

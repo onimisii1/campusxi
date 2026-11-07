@@ -20,7 +20,7 @@ from app.db import get_conn
 from app import wallet
 from app.engines.p2p import (FANTASY_H2H, MATCH_RESULT, Bet, Fill, opposite, quote_creator,
                             quote_fill, validate_fill, validate_new_bet)
-from app.gate import require_paid_play
+from app.gate import identity_ok, require_paid_play
 from app.idempotency import Idempotent
 from app.errors import ApiError
 from app.fantasy import team_totals
@@ -159,6 +159,88 @@ def board(match_id: UUID, user=Depends(optional_user), conn=Depends(get_conn)):
         (match_id,)).fetchall()
     records = _records(conn, {r["creator_id"] for r in rows})
     return [_card(r, records, user) for r in rows]
+
+
+FEED_LIMIT = 50
+
+
+@router.get("/bets/feed")
+def feed(match_id: UUID | None = None, sport: str | None = None, user=Depends(current_user),
+         conn=Depends(get_conn), now=Depends(utcnow)):
+    """Swipe to match: open board challenges from other players, soonest match first.
+
+    Leaves out your own, ones you've skipped or already taken, matches that have locked, and staked ones
+    you couldn't take anyway (paid play off or ID not verified; Home/Away needs its own flag; linked
+    accounts can't play each other for money)."""
+    paid = settings.paid_play_enabled and identity_ok(user)
+    rows = conn.execute(
+        """select b.*, u.team_name, u.avatar_url from p2p_bets b
+           join users u on u.id = b.creator_id and u.deleted_at is null
+           join matches m on m.id = b.match_id
+           join tournaments t on t.id = m.tournament_id and t.status = 'published'
+           where b.visibility = 'board' and b.status in ('open', 'partially_matched') and b.creator_id <> %(u)s
+             and m.scheduled_start > %(now)s
+             and (%(mid)s::uuid is null or b.match_id = %(mid)s)
+             and (%(sport)s::text is null or t.sport = %(sport)s)
+             and (b.stake_kobo = 0 or %(paid)s)
+             and (b.kind <> 'match_result' or %(results)s)
+             and not exists (select 1 from p2p_bet_skips s where s.bet_id = b.id and s.user_id = %(u)s)
+             and not exists (select 1 from p2p_bet_fills f where f.bet_id = b.id and f.challenger_id = %(u)s)
+           order by m.scheduled_start, b.created_at
+           limit %(limit)s""",
+        {"u": user["id"], "now": now, "mid": match_id, "sport": sport, "paid": paid,
+         "results": paid and settings.result_bets_enabled, "limit": FEED_LIMIT}).fetchall()
+    linked = linked_users(conn, user["id"]) if paid and any(r["stake_kobo"] for r in rows) else set()
+    rows = [r for r in rows if not (r["stake_kobo"] and str(r["creator_id"]) in linked)]
+    matches, my_teams = {}, {}
+    for mid in {r["match_id"] for r in rows}:
+        m = load_match(conn, mid)
+        if not is_locked(m, now):
+            matches[mid] = m
+    if matches:
+        for t in conn.execute("select id, match_id, label from fantasy_teams where user_id = %s and match_id = any(%s) "
+                              "order by created_at", (user["id"], list(matches))).fetchall():
+            my_teams.setdefault(t["match_id"], []).append({"id": t["id"], "label": t["label"]})
+    records = _records(conn, {r["creator_id"] for r in rows})
+    skipped = conn.execute("""select count(*) as n from p2p_bet_skips s join p2p_bets b on b.id = s.bet_id
+                              where s.user_id = %s and b.status in ('open', 'partially_matched')
+                                and (%s::uuid is null or b.match_id = %s)""",
+                           (user["id"], match_id, match_id)).fetchone()["n"]
+    cards = []
+    for r in rows:
+        m = matches.get(r["match_id"])
+        if m is None:
+            continue
+        cards.append({**_card(r, records, user), "creator_avatar": r["avatar_url"],
+                      "match": {"id": m["id"], "sport": m["sport"], "tournament": m["tournament"],
+                                "stage": m["stage"], "venue": m["venue"], "scheduled_start": m["scheduled_start"],
+                                "home_team": {"name": m["home_team"], "colour": m["home_colour"], "logo": m["home_logo"]},
+                                "away_team": {"name": m["away_team"], "colour": m["away_colour"], "logo": m["away_logo"]}},
+                      "my_teams": my_teams.get(m["id"], [])})
+    return {"cards": cards, "skipped": skipped}
+
+
+@router.post("/bets/{bet_id}/skip", status_code=204)
+def skip(bet_id: UUID, user=Depends(current_user), conn=Depends(get_conn), now=Depends(utcnow)):
+    """Swipe left: don't show this challenge again."""
+    if conn.execute("select 1 from p2p_bets where id = %s", (bet_id,)).fetchone() is None:
+        raise ApiError(404, "challenge_not_found", "challenge not found")
+    conn.execute("insert into p2p_bet_skips (user_id, bet_id, created_at) values (%s, %s, %s) "
+                 "on conflict do nothing", (user["id"], bet_id, now))
+
+
+@router.delete("/bets/{bet_id}/skip", status_code=204)
+def unskip(bet_id: UUID, user=Depends(current_user), conn=Depends(get_conn)):
+    """Rewind: bring a skipped challenge back."""
+    conn.execute("delete from p2p_bet_skips where user_id = %s and bet_id = %s", (user["id"], bet_id))
+
+
+@router.delete("/me/bet-skips", status_code=204)
+def clear_skips(match_id: UUID | None = None, user=Depends(current_user), conn=Depends(get_conn)):
+    """Show me the challenges I skipped again."""
+    conn.execute("""delete from p2p_bet_skips s using p2p_bets b
+                    where s.bet_id = b.id and s.user_id = %s and (%s::uuid is null or b.match_id = %s)""",
+                 (user["id"], match_id, match_id))
 
 
 @router.get("/bets/invite/{token}")

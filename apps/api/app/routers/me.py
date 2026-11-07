@@ -88,6 +88,7 @@ def delete_account(user=Depends(current_user), conn=Depends(get_conn), now=Depen
     conn.execute("delete from media where owner_id = %s and kind = 'avatar'", (user["id"],))
     conn.execute(
         """update users set team_name = %s, avatar_url = null, referral_code = null, device_fingerprint = null,
+                            legal_name = null,
                             roles = '{player}', deleted_at = %s where id = %s""",
         (f"deleted_{secrets.token_hex(4)}", now, user["id"]))
     audit(conn, user["id"], "account.delete", "user", user["id"])

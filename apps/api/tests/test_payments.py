@@ -30,11 +30,13 @@ class FakePSPs:
             if not self.paystack_up:
                 return httpx.Response(503, json={"status": False, "message": "maintenance"})
             if path == "/transaction/initialize":
-                self.txns[body["reference"]] = {"status": "pending", "amount": body["amount"]}
+                self.txns[body["reference"]] = {"status": "pending", "amount": body["amount"],
+                                                "channels": body["channels"]}
                 return ok_ps({"authorization_url": f"https://checkout.paystack.com/{body['reference']}"})
             if path.startswith("/transaction/verify/"):
                 t = self.txns[path.rsplit("/", 1)[1]]
-                return ok_ps({"status": t["status"], "amount": t["amount"], "channel": "card", "fees": 150})
+                return ok_ps({"status": t["status"], "amount": t["amount"], "channel": t.get("channel", "card"),
+                              "fees": 150, "authorization": t.get("authorization", {})})
             if path == "/bank":
                 return ok_ps([{"code": "058", "name": "GTBank"}, {"code": "044", "name": "Access Bank"}])
             if path == "/bank/resolve":

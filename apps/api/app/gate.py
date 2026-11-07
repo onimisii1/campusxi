@@ -58,8 +58,7 @@ def require_paid_play(conn, user: dict, now, amount: int = 0, result_bet: bool =
         raise ApiError(403, "paid_play_unavailable", "paid contests and stakes aren't open yet")
     if result_bet and not settings.result_bets_enabled:
         raise ApiError(403, "result_bets_unavailable", "Home/Away bets aren't open yet")
-    if user["kyc_status"] != "verified":
-        raise ApiError(403, "kyc_required", "verify your ID (NIN or BVN) before playing for money")
+    require_identity(user, "before playing for money")
     if age_on(user["dob"], now.date()) < 18:
         raise ApiError(403, "under_18", "CampusXI is for players aged 18 and over")
     until = self_excluded_until(conn, user["id"], now)
@@ -70,9 +69,23 @@ def require_paid_play(conn, user: dict, now, amount: int = 0, result_bet: bool =
         raise ApiError(403, "stake_limit", "that would go over the daily stake limit you set")
 
 
+def identity_ok(user: dict) -> bool:
+    """KYC on: a verified ID. KYC optional (for now): the player ticked "I'm 18 or older"."""
+    if settings.kyc_required:
+        return user["kyc_status"] == "verified"
+    return user.get("adult_confirmed_at") is not None
+
+
+def require_identity(user: dict, doing: str) -> None:
+    if identity_ok(user):
+        return
+    if settings.kyc_required:
+        raise ApiError(403, "kyc_required", f"verify your ID (NIN or BVN) {doing}")
+    raise ApiError(403, "confirm_18", f"confirm you're 18 or older {doing}")
+
+
 def require_deposit_allowed(conn, user: dict, now, amount: int) -> None:
-    if user["kyc_status"] != "verified":
-        raise ApiError(403, "kyc_required", "verify your ID (NIN or BVN) before adding money")
+    require_identity(user, "before adding money")
     if self_excluded_until(conn, user["id"], now):
         raise ApiError(403, "self_excluded", "you've taken a break from paid play")
     if amount < settings.min_deposit_kobo:

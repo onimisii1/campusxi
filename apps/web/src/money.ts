@@ -13,6 +13,13 @@ export type Wallet = {
   bonus_max_share_bps: number
   min_deposit_kobo: number
   min_withdrawal_kobo: number
+  // KYC optional for now (SportyBet-style): 18+ tick box, full name as on the bank account, bank transfer
+  kyc_required: boolean
+  can_play_paid: boolean
+  adult_confirmed: boolean
+  legal_name: string | null
+  legal_name_locked: boolean
+  deposit_methods: string[]
   limits: {
     daily_deposit_kobo: number | null
     daily_stake_kobo: number | null
@@ -20,6 +27,14 @@ export type Wallet = {
     staked_today_kobo: number
     self_excluded_until: string | null
   }
+}
+
+/** What a player still needs before playing for cash: an ID check, or (KYC optional) the 18+ tick box. */
+export function paidGate(w: Wallet): { href: string; text: string } | null {
+  if (w.can_play_paid) return null
+  return w.kyc_required
+    ? { href: '#/verify', text: '🪪 Verify your ID to play for cash →' }
+    : { href: '#/wallet', text: "Confirm you're 18+ in your wallet to play for cash →" }
 }
 
 export function naira(kobo: number): string {

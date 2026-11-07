@@ -1,16 +1,15 @@
-"""Local demo: a database with one football match ready to score, plus sign-in tokens.
+"""Local database with ONLY the real NUESA data from the gitignored data/ folder, plus test logins.
 
-    python scripts/dev_seed.py              # starts a local Postgres in apps/api/.devdb (pgserver)
+    python scripts/dev_seed.py               # starts a local Postgres in apps/api/.devdb (pgserver)
+    python scripts/dev_seed.py --reset       # wipe the local .devdb database first, then reload data/
+    python scripts/dev_seed.py --challenges  # the test fans post free challenges on the next match
     DATABASE_URL=... python scripts/dev_seed.py
-    KICKOFF_IN_MINUTES=5 python scripts/dev_seed.py
-    python scripts/dev_seed.py --reset      # wipe the local .devdb database first
-    python scripts/dev_seed.py --nuesa      # also import the real tournament CSVs from data/ (gitignored)
-    python scripts/dev_seed.py --money      # paid-play demo: verified fans with test cash, paid contests
 
-Prints DATABASE_URL, SUPABASE_JWT_SECRET and tokens for an admin, two scorers, two fans
-and a newcomer with no profile yet.
-Start the API with those two variables set, then paste a scorer token into the web
-app's development sign-in (#/scorer). Never point this at a production database.
+Loads nuesa_{football,basketball}_{squads,fixtures,results,result_stats}.csv from data/ and creates
+bare Nile test logins (admin, two scorers, two fans: no teams, money or challenges). Prints
+DATABASE_URL, SUPABASE_JWT_SECRET and their sign-in tokens, plus a newcomer with no profile yet.
+Start the API with those two variables set, then paste a token into the web app's development
+sign-in (#/signin, or #/scorer for scorers). Never point this at a production database.
 """
 import os
 import pathlib
@@ -25,6 +24,9 @@ import psycopg
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPO = ROOT.parents[1]
 sys.path.insert(0, str(ROOT))
+
+LOGINS = (("admin", ["player", "admin"]), ("scorer_a", ["player", "scorer"]), ("scorer_b", ["player", "scorer"]),
+          ("fan_a", ["player"]), ("fan_b", ["player"]))
 
 
 def database_url(reset: bool) -> str:
@@ -57,21 +59,26 @@ def migrate(url: str):
 
 
 def main():
+    data = REPO / "data"
+    if not (data / "nuesa_football_squads.csv").exists():
+        sys.exit("no data/nuesa_*.csv files: put the NUESA CSVs in the repo's data/ folder first")
     url = database_url(reset="--reset" in sys.argv)
     secret = os.environ.get("SUPABASE_JWT_SECRET") or secrets.token_urlsafe(32)
     os.environ.update(DATABASE_URL=url, SUPABASE_JWT_SECRET=secret)
     migrate(url)
 
+    # Bare test logins at Nile (no teams, money or challenges of their own); reused on later runs.
     with psycopg.connect(url, autocommit=True) as c:
-        school = c.execute("insert into schools (name) values (%s) returning id",
-                           (f"Demo University {secrets.token_hex(2)}",)).fetchone()[0]
+        row = c.execute("select id from schools where name = 'Nile University of Nigeria'").fetchone()
+        school = row[0] if row else c.execute(
+            "insert into schools (name) values ('Nile University of Nigeria') returning id").fetchone()[0]
         users = {}
-        for name, roles in (("admin", ["player", "admin"]), ("scorer_a", ["player", "scorer"]),
-                            ("scorer_b", ["player", "scorer"]), ("fan_a", ["player"]), ("fan_b", ["player"])):
-            uid = uuid.uuid4()
-            c.execute("insert into users (id, school_id, team_name, roles, dob) values (%s, %s, %s, %s, '2000-01-01')",
-                      (uid, school, f"{name}_{uid.hex[:4]}", roles))
-            users[name] = uid
+        for name, roles in LOGINS:
+            found = c.execute("select id from users where team_name = %s", (f"nile_{name}",)).fetchone()
+            users[name] = found[0] if found else c.execute(
+                "insert into users (id, school_id, team_name, roles, dob) values (%s, %s, %s, %s, '2000-01-01') "
+                "returning id", (uuid.uuid4(), school, f"nile_{name}", roles)).fetchone()[0]
+        loaded = c.execute("select count(*) from tournaments where name like 'NUESA %%'").fetchone()[0]
 
     from fastapi.testclient import TestClient
 
@@ -81,7 +88,6 @@ def main():
         return jwt.encode({"sub": str(uid), "aud": "authenticated",
                            "exp": datetime.now(timezone.utc) + timedelta(days=7)}, secret, algorithm="HS256")
 
-    admin = {"Authorization": f"Bearer {tok(users['admin'])}"}
     client = TestClient(app)
 
     def ok(res):
@@ -89,84 +95,24 @@ def main():
             sys.exit(f"seed failed: {res.status_code} {res.text}")
         return res.json()
 
-    seed = REPO / "supabase" / "seed"
-    t = ok(client.post("/admin/tournaments", headers=admin, json={
-        "school_id": str(school), "sport": "football", "name": "Demo Cup", "match_minutes": 90}))
-    ok(client.post(f"/admin/tournaments/{t['id']}/squads", headers=admin,
-                   content=(seed / "example_football_squads.csv").read_text()))
-    minutes = int(os.environ.get("KICKOFF_IN_MINUTES", "20"))
-    kickoff = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).replace(microsecond=0)
-    ok(client.post(f"/admin/tournaments/{t['id']}/fixtures", headers=admin,
-                   content=f"home_team,away_team,scheduled_start,venue\nEngineering,Law,{kickoff.isoformat()},Main Bowl\n"))
-    ok(client.post(f"/admin/tournaments/{t['id']}/publish", headers=admin))
-    match = ok(client.get("/matches", params={"tournament_id": t["id"]}))[0]
-    detail = ok(client.get(f"/matches/{match['id']}"))
-    starters = [a["id"] for side in ("home", "away") for a in detail["squads"][side]
-                if a["name"].split()[-2] in ("GK", "DEF", "MID", "FWD")
-                and int(a["name"].split()[-1]) <= {"GK": 1, "DEF": 4, "MID": 4, "FWD": 2}[a["name"].split()[-2]]]
-    bench = [a["id"] for a in detail["squads"]["home"] if a["name"] == "Engineering FWD 3"]
-    ok(client.post(f"/admin/matches/{match['id']}/lineup", headers=admin, json={"starters": starters, "bench": bench}))
-    ok(client.post(f"/admin/matches/{match['id']}/scorers", headers=admin,
-                   json={"user_ids": [str(users["scorer_a"]), str(users["scorer_b"])]}))
-
-    if "--nuesa" in sys.argv:
-        load_nuesa(client, ok, tok)
-    if "--money" in sys.argv:
-        seed_money(url, users, match["id"])
+    if loaded:
+        print("NUESA tournaments already loaded (use --reset to reload them from data/)", file=sys.stderr)
+    else:
+        load_nuesa(client, ok, {"Authorization": f"Bearer {tok(users['admin'])}"}, school, data)
+    if "--challenges" in sys.argv:
+        post_test_challenges(client, ok, tok, users)
 
     print(f"DATABASE_URL={url}")
     print(f"SUPABASE_JWT_SECRET={secret}")
-    print(f"MATCH_ID={match['id']}  kick-off {kickoff.isoformat()}")
     for name, uid in users.items():
         print(f"TOKEN_{name.upper()}={tok(uid)}")
     print(f"TOKEN_NEWCOMER={tok(uuid.uuid4())}   # signed in, no profile yet")
 
 
-def seed_money(url, users, match_id):
-    """Local demo of paid play WITHOUT a payment provider: the fans are ID-verified and given test
-    cash straight in the local ledger (as if a deposit had cleared), fan_a also gets referral coins,
-    and the demo match gets a N1,000 paid contest. Run the API with PAID_PLAY_ENABLED=true (and
-    RESULT_BETS_ENABLED=true for Home/Away bets). Never point this at a real database."""
-    from datetime import datetime, timezone
-
-    from app import wallet
-    from app.routers.contests import create_paid_contest
-    from psycopg.rows import dict_row
-    with psycopg.connect(url, row_factory=dict_row) as c:
-        with c.transaction():
-            for name in ("fan_a", "fan_b", "admin"):
-                c.execute("update users set kyc_status = 'verified' where id = %s", (users[name],))
-                c.execute("""insert into kyc_records (user_id, provider, provider_ref, verified_name, status, id_type,
-                             id_last4) values (%s, 'stub', 'dev-seed', %s, 'verified', 'nin', '0000')""",
-                          (users[name], f"Dev {name.title()}"))
-                wallet.credit_deposit(c, users[name], 2_000_000, "paystack", None)     # N20,000 test cash
-            wallet.grant_bonus(c, users["fan_a"], 50_000, "referral", datetime.now(timezone.utc))
-            create_paid_contest(c, match_id, "₦1,000 Mega", 10, 100_000)
-            create_paid_contest(c, match_id, "₦400 Mini", 5, 40_000)
-    print("money demo: fans verified with N20,000 test cash; fan_a has N500 coins; paid contests added",
-          file=sys.stderr)
-
-
-def load_nuesa(client, ok, tok):
-    """Import a real tournament from CSVs in the repo's gitignored data/ folder:
+def load_nuesa(client, ok, admin, school, data):
+    """Import the real tournament from the gitignored data/ folder:
     nuesa_{football,basketball}_{squads,fixtures,results,result_stats}.csv (results are optional).
-    Those files hold students' names, so they never go into git; without them this step is skipped.
-    Prints tokens for the Nile admin and two Nile scorers (admins manage only their own school)."""
-    data = REPO / "data"
-    if not (data / "nuesa_football_squads.csv").exists():
-        print("no data/nuesa_*.csv files; skipping the NUESA tournament", file=sys.stderr)
-        return
-    with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as c:
-        row = c.execute("select id from schools where name = 'Nile University of Nigeria'").fetchone()
-        school = row[0] if row else c.execute(
-            "insert into schools (name) values ('Nile University of Nigeria') returning id").fetchone()[0]
-        nile = {}
-        for name, roles in (("admin", ["player", "admin"]), ("scorer_a", ["player", "scorer"]),
-                            ("scorer_b", ["player", "scorer"])):
-            nile[name] = uuid.uuid4()
-            c.execute("insert into users (id, school_id, team_name, roles, dob) values (%s, %s, %s, %s, '2000-01-01')",
-                      (nile[name], school, f"nile_{name}_{nile[name].hex[:4]}", roles))
-    admin = {"Authorization": f"Bearer {tok(nile['admin'])}"}
+    Those files hold students' names, so they never go into git."""
     for sport, minutes in (("football", 30), ("basketball", 32)):
         if not (data / f"nuesa_{sport}_squads.csv").exists():
             continue
@@ -181,8 +127,41 @@ def load_nuesa(client, ok, tok):
                                content=path.read_text(encoding="utf-8")))
         ok(client.post(f"/admin/tournaments/{t['id']}/publish", headers=admin))
         print(f"NUESA {sport} tournament {t['id']} loaded", file=sys.stderr)
-    for name, uid in nile.items():
-        print(f"TOKEN_NILE_{name.upper()}={tok(uid)}")
+
+
+def post_test_challenges(client, ok, tok, users):
+    """--challenges: so the swipe deck has cards locally, the two test fans each build a team for the
+    next NUESA match that hasn't started and post two free challenges on the open board."""
+    import random
+
+    from app.engines.scoring.rules import CAPTAIN, KEY, NONE, VICE_CAPTAIN
+    from app.engines.scoring.teams import Pick, SquadAthlete, validate_team
+
+    upcoming = [m for m in ok(client.get("/matches")) if not m["locked"]]
+    if not upcoming:
+        print("no NUESA match still to come: no test challenges posted", file=sys.stderr)
+        return
+    m = upcoming[0]
+    detail = ok(client.get(f"/matches/{m['id']}"))
+    squad = [SquadAthlete(a["id"], side, a["position"]) for side in ("home", "away") for a in detail["squads"][side]]
+    size = 11 if m["sport"] == "football" else 8
+    rng = random.Random(7)
+    for fan in ("fan_a", "fan_b"):
+        auth = {"Authorization": f"Bearer {tok(users[fan])}"}
+        for _ in range(20000):
+            chosen = rng.sample(squad, size)
+            roles = [CAPTAIN, VICE_CAPTAIN, KEY] + [NONE] * (size - 3)
+            picks = [Pick(a.athlete_id, r) for a, r in zip(chosen, roles)]
+            if not validate_team(m["sport"], picks, squad):
+                break
+        else:
+            sys.exit(f"couldn't build a valid test team for {m['home_team']['name']} v {m['away_team']['name']}")
+        team = ok(client.post(f"/matches/{m['id']}/teams", headers=auth,
+                              json={"picks": [{"athlete_id": p.athlete_id, "role": p.role} for p in picks]}))
+        for _ in range(2):
+            ok(client.post("/bets", headers=auth, json={"match_id": m["id"], "fantasy_team_id": team["id"]}))
+    print(f"test challenges: 4 free challenges on {m['home_team']['name']} v {m['away_team']['name']}",
+          file=sys.stderr)
 
 
 if __name__ == "__main__":

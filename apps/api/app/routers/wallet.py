@@ -11,7 +11,7 @@ from app.clock import utcnow
 from app.config import settings
 from app.db import get_conn
 from app.errors import ApiError
-from app.gate import limits
+from app.gate import identity_ok, limits
 from app.kyc import identity_hash, provider
 from app.referrals import ensure_code, maybe_reward
 from app.routers.me import age_on
@@ -37,7 +37,49 @@ def my_wallet(user=Depends(current_user), conn=Depends(get_conn), now=Depends(ut
             "paid_play_enabled": settings.paid_play_enabled, "result_bets_enabled": settings.result_bets_enabled,
             "bonus_max_share_bps": settings.bonus_max_share_bps,
             "min_deposit_kobo": settings.min_deposit_kobo, "min_withdrawal_kobo": settings.min_withdrawal_kobo,
-            "limits": limits(conn, user["id"], now)}
+            "limits": limits(conn, user["id"], now),
+            # KYC optional for now: the 18+ tick box, the full name bank accounts must be in, bank transfer only.
+            "kyc_required": settings.kyc_required, "can_play_paid": identity_ok(user),
+            "adult_confirmed": user["adult_confirmed_at"] is not None, "legal_name": user["legal_name"],
+            "legal_name_locked": _name_locked(conn, user["id"]),
+            "deposit_methods": ["card", "bank", "ussd", "bank_transfer"] if settings.kyc_required else ["bank_transfer"]}
+
+
+def _name_locked(conn, user_id) -> bool:
+    """Like SportyBet: once a bank account is saved in that name, changing it goes through support."""
+    return conn.execute("select 1 from bank_accounts where user_id = %s", (user_id,)).fetchone() is not None
+
+
+class AdultIn(BaseModel):
+    confirm: Literal[True]
+
+
+@router.post("/me/confirm-18")
+def confirm_adult(body: AdultIn, user=Depends(current_user), conn=Depends(get_conn), now=Depends(utcnow)):
+    """The "I'm 18 or older" tick box that stands in for an ID check while KYC is optional."""
+    if user["adult_confirmed_at"] is None:
+        conn.execute("update users set adult_confirmed_at = %s where id = %s", (now, user["id"]))
+        audit(conn, user["id"], "user.confirm_18", "user", user["id"])
+    return {"adult_confirmed": True}
+
+
+class LegalNameIn(BaseModel):
+    legal_name: str = Field(min_length=3, max_length=120)
+
+
+@router.put("/me/legal-name")
+def set_legal_name(body: LegalNameIn, user=Depends(current_user), conn=Depends(get_conn)):
+    """Full name as on the player's bank account; withdrawals only go to accounts in this name."""
+    name = " ".join(body.legal_name.split())
+    words = name.split()
+    if len(words) < 2 or not all(w.replace("-", "").replace("'", "").isalpha() for w in words):
+        raise ApiError(422, "bad_legal_name", "give your first name and surname, as on your bank account")
+    if user["legal_name"] != name and _name_locked(conn, user["id"]):
+        raise ApiError(409, "legal_name_locked", "you've already added a bank account in this name: "
+                                                  "contact support to change it")
+    conn.execute("update users set legal_name = %s where id = %s", (name, user["id"]))
+    audit(conn, user["id"], "user.legal_name", "user", user["id"])
+    return {"legal_name": name}
 
 
 @router.get("/me/wallet/history")

@@ -3844,3 +3844,450 @@ hr.rule {
   color: #fff;
   box-shadow: none;
 }
+
+/* ---------- Swipe & Match (Nov 2026): open challenges as a card deck, the design's lime card on top ---------- */
+.swipe-promo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.swipe-promo b {
+  display: block;
+  font-size: 1rem;
+}
+
+.swipe-promo small {
+  color: var(--muted);
+}
+
+.swipe-promo-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--on-lime);
+  font-size: 1.3rem;
+  box-shadow: 0 0 0 6px rgb(205 245 74 / 12%);
+}
+
+.swipe-sports {
+  margin: 4px 0 14px;
+}
+
+.swipe-deck {
+  position: relative;
+  height: 468px;
+  margin: 6px 0 22px;
+}
+
+.swipe-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 18px 18px;
+  border-radius: 28px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+
+.swipe-card.top {
+  z-index: 3;
+  background: var(--lime);
+  border-color: transparent;
+  color: var(--on-lime);
+  cursor: grab;
+  touch-action: none;
+  will-change: transform;
+}
+
+.swipe-card.top:active {
+  cursor: grabbing;
+}
+
+.swipe-card.behind {
+  z-index: calc(3 - var(--depth));
+  transform: translateY(calc(var(--depth) * 14px)) scale(calc(1 - var(--depth) * 0.05));
+  opacity: calc(1 - var(--depth) * 0.3);
+  transition: transform 0.28s ease, opacity 0.28s ease;
+}
+
+.swipe-card.behind > * {
+  visibility: hidden;
+}
+
+.sc-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.swipe-card.top .avatar:not(.photo) {
+  background: var(--on-lime);
+  color: var(--lime);
+}
+
+.sc-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.sc-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sc-name small {
+  opacity: 0.7;
+}
+
+.sc-kind {
+  flex: none;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--on-lime);
+  color: var(--lime);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.sc-line {
+  margin: 4px 0 0;
+  font-size: 1.45rem;
+  font-style: italic;
+  font-weight: 300;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.sc-line b {
+  font-weight: 800;
+}
+
+.sc-match {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sc-team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: center;
+}
+
+.sc-team b {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sc-vs {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--on-lime);
+  color: var(--lime);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.sc-when {
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.sc-prize {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin-top: auto;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgb(205 245 74 / 18%);
+}
+
+.sc-prize span {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+  background: var(--on-lime);
+  color: var(--ink);
+}
+
+.sc-prize small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.sc-prize b {
+  color: var(--lime);
+  font-size: 1.1rem;
+}
+
+.sc-yours {
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+.stamp {
+  position: absolute;
+  top: 22px;
+  z-index: 2;
+  padding: 4px 12px;
+  border: 3px solid currentColor;
+  border-radius: 10px;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+
+.stamp.take {
+  left: 18px;
+  color: var(--on-lime);
+  background: rgb(255 255 255 / 35%);
+  transform: rotate(-12deg);
+}
+
+.stamp.skip {
+  right: 18px;
+  color: #d93a3a;
+  background: rgb(255 255 255 / 55%);
+  transform: rotate(12deg);
+}
+
+.swipe-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.swipe-btn {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--tile);
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.swipe-btn:active {
+  transform: scale(0.92);
+}
+
+.swipe-btn.small {
+  width: 48px;
+  height: 48px;
+  color: var(--muted);
+}
+
+.swipe-btn.small:disabled {
+  opacity: 0.35;
+}
+
+.swipe-btn.skip {
+  color: var(--bad);
+}
+
+.swipe-btn.take {
+  width: 76px;
+  height: 76px;
+  border: 0;
+  background: var(--lime);
+  color: var(--on-lime);
+  box-shadow: 0 0 0 8px rgb(205 245 74 / 14%), 0 10px 30px rgb(205 245 74 / 25%);
+}
+
+.swipe-count {
+  flex-basis: 100%;
+  text-align: center;
+}
+
+.swipe-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 36px 8px;
+  text-align: center;
+}
+
+.swipe-empty .headline {
+  margin: 0;
+}
+
+.swipe-empty .primary,
+.swipe-empty .sheet-btn {
+  width: min(320px, 100%);
+}
+
+.swipe-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--on-lime);
+  font-size: 2rem;
+}
+
+.matched {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px 16px;
+  text-align: center;
+  background: radial-gradient(circle at 50% 38%, rgb(205 245 74 / 22%), transparent 62%), rgb(11 12 10 / 97%);
+  animation: matched-in 0.25s ease-out;
+}
+
+.matched .headline {
+  margin: 0;
+  font-size: 2.6rem;
+}
+
+.matched .headline b {
+  color: var(--lime);
+}
+
+.matched-faces {
+  display: flex;
+  align-items: center;
+}
+
+.matched-faces .avatar {
+  box-shadow: 0 0 0 4px var(--lime);
+  font-size: 1.6rem;
+}
+
+.matched-bolt {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 -14px;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--on-lime);
+  font-size: 1.4rem;
+  box-shadow: 0 0 0 6px var(--page);
+}
+
+.matched-line {
+  margin: 0;
+  max-width: 320px;
+}
+
+.matched .primary {
+  width: min(320px, 100%);
+}
+
+.matched-burst {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  pointer-events: none;
+}
+
+.matched-burst i {
+  position: absolute;
+  width: 6px;
+  height: 18px;
+  margin-left: -3px;
+  border-radius: 3px;
+  background: var(--lime);
+  animation: matched-burst 0.8s ease-out both;
+}
+
+.matched-burst i:nth-child(odd) {
+  background: var(--ink);
+  height: 12px;
+}
+
+@keyframes matched-burst {
+  from {
+    transform: rotate(calc(var(--i) * 25.7deg)) translateY(-30px) scale(0.3);
+    opacity: 1;
+  }
+  to {
+    transform: rotate(calc(var(--i) * 25.7deg)) translateY(-170px) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes matched-in {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swipe-card,
+  .matched,
+  .matched-burst i {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* KYC optional for now: the 18+ tick box and the bank-account name, at the top of the wallet */
+.start-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.start-checks.done {
+  flex-direction: row;
+  align-items: center;
+}

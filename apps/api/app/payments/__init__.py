@@ -33,6 +33,11 @@ class Payment:
     amount_kobo: int
     channel: str | None = None
     fee_kobo: int = 0
+    # Who paid, when the provider says (bank transfers): account holder name, bank, account number
+    # (often masked except the last digits).
+    payer_name: str | None = None
+    payer_bank: str | None = None
+    payer_account: str | None = None
 
 
 @dataclass(frozen=True)

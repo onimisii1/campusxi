@@ -193,15 +193,21 @@ signing in once and finishing your profile, `...ootstrap.py make-admin you@exam
    `https://<api>/payments/paystack/webhook` and `https://<api>/payments/flutterwave/webhook`.
    Set `PUBLIC_APP_URL` to the web app's address (checkout returns there).
 3. **KYC provider:** add a class in `app/kyc/` for the chosen provider (Dojah, Prembly, Smile ID, ...),
-   register it in `PROVIDERS`, set `KYC_PROVIDER` and a long random `KYC_PEPPER`. The `stub` provider
-   is for test mode only.
+   register it in `PROVIDERS`, set `KYC_PROVIDER` and a long random `KYC_PEPPER`, then
+   `KYC_REQUIRED=true`. The `stub` provider is for test mode only.
+
+   **Until then, ID checks are optional** (`KYC_REQUIRED=false`, the default), SportyBet-style:
+   players tick "I'm 18 or older" (`POST /me/confirm-18`) and give their full name as on their bank
+   account (`PUT /me/legal-name`; locked once a bank account is saved). Deposits are **bank transfer
+   only**, and the provider's verify tells us who paid (name, bank, last four digits). A bank account
+   can only be added, and a withdrawal only sent, if its bank-confirmed name matches that full name
+   **and** it has paid into the wallet; if the bank names don't line up, an admin approves. Referral
+   coins are paid when the friend's first ₦1,000+ deposit comes from an account no other player has
+   paid in from.
 4. Switches: `PAID_PLAY_ENABLED=true`; `RESULT_BETS_ENABLED=true` only if the licence covers sports
    betting; `JOBS_ENABLED=true` on exactly one API instance (or run the cron entry instead).
 5. Check `/health` (database ok, providers listed, jobs running) and `#/admin/finance` (ledger balanced).
 
-Local demo without a provider: `scripts/dev_seed.py --money` verifies the demo fans and credits test
-cash straight into the local ledger, then adds paid contests; run the API with
-`PAID_PLAY_ENABLED=true RESULT_BETS_ENABLED=true`.
 
 ## Tests
 
@@ -263,22 +269,30 @@ Sign-in uses Supabase email one-time codes. Set `VITE_SUPABASE_URL` and `VITE_SU
 (see `apps/web/.env.example`), and make sure the Supabase "Magic Link" email template includes
 `{{ .Token }}` so users receive a code rather than only a link.
 
-### Local scorer testing (no Supabase needed)
+**Swipe & Match** (`#/swipe`, or `#/swipe/<match id>` for one match): open challenges from other
+fans as a card deck. Swipe right (or tap ⚡) to take one on, which is an ordinary accept
+(`POST /bets/{id}/fills`). A free head-to-head with your only team goes straight through; a stake,
+a Home/Away slice or a choice of teams asks first. Swipe left to skip (`POST /bets/{id}/skip`, so it
+doesn't come back), ↺ brings the last one back, and "Show the ones you skipped" clears them
+(`DELETE /me/bet-skips`). `GET /bets/feed` leaves out your own, ones you've skipped or taken, locked
+matches, and stakes you couldn't take. Home, My challenges and each match's Challenges page link to it.
+
+### Local testing (no Supabase needed)
 
 ```bash
 cd apps/api
-.venv/Scripts/python scripts/dev_seed.py
+.venv/Scripts/python scripts/dev_seed.py --reset
 ```
 
-This starts a local Postgres (in `apps/api/.devdb`), applies any new migrations, creates a demo
-match 20 minutes from now (`KICKOFF_IN_MINUTES` to change) with two scorers assigned, and prints
-`DATABASE_URL`, `SUPABASE_JWT_SECRET` and sign-in tokens for an admin, two scorers, two fans and a
-newcomer with no profile. Run the API with those two variables set, start the web app, and paste
-a token into the development sign-in (`#/signin`, or `#/scorer` for scorers). `--reset` wipes the
-local database first.
-
-`--nuesa` also imports a real tournament from `data/nuesa_{football,basketball}_{squads,fixtures}.csv`.
-`data/` is gitignored because those files hold students' names; without them the step is skipped.
+The local database holds **only the real NUESA data** from the gitignored `data/` folder
+(`nuesa_{football,basketball}_{squads,fixtures,results,result_stats}.csv`; those files hold
+students' names, so they never go into git), plus bare Nile test logins: an admin, two scorers and
+two fans, with no teams, money or challenges of their own. It starts a local Postgres (in
+`apps/api/.devdb`), applies new migrations, and prints `DATABASE_URL`, `SUPABASE_JWT_SECRET` and
+sign-in tokens for those logins and a newcomer with no profile. Run the API with those two
+variables set, start the web app, and paste a token into the development sign-in (`#/signin`, or
+`#/scorer` for scorers). `--reset` wipes the local database and reloads `data/`; `--challenges` has
+the two test fans post free challenges on the next NUESA match, so the swipe deck has cards.
 
 ## Build status
 

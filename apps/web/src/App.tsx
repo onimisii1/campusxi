@@ -18,6 +18,7 @@ import PlayerPage from './pages/PlayerPage'
 import ProfilePage from './pages/ProfilePage'
 import SeasonTable from './pages/SeasonTable'
 import SignInPage from './pages/SignInPage'
+import SwipePage from './pages/SwipePage'
 import TournamentPage from './pages/TournamentPage'
 import WalletPage, { DepositReturn } from './pages/WalletPage'
 import { useRoute } from './router'
@@ -44,6 +45,7 @@ function Page({ route }: { route: string[] }) {
     case 'tournament': return <TournamentPage key={a} tournamentId={a} />
     case 'challenge': return <ChallengeInvite key={a} token={a} />
     case 'challenges': return <MyChallenges />
+    case 'swipe': return <SwipePage key={a ?? 'all'} matchId={a} />
     case 'me': return <MePage />
     case 'signin': return <SignInPage />
     case 'profile': return <ProfilePage />

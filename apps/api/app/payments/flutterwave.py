@@ -29,10 +29,12 @@ class Flutterwave:
             raise ProviderError(f"flutterwave {path}: {body.get('message', res.status_code)}")
         return body["data"]
 
-    def init_deposit(self, reference: str, amount_kobo: int, email: str, callback_url: str) -> Checkout:
+    def init_deposit(self, reference: str, amount_kobo: int, email: str, callback_url: str,
+                     bank_transfer_only: bool = False) -> Checkout:
         data = self._call("POST", "/payments", json={
             "tx_ref": reference, "amount": amount_kobo / 100, "currency": "NGN", "redirect_url": callback_url,
-            "customer": {"email": email}, "payment_options": "card,banktransfer,ussd"})
+            "customer": {"email": email},
+            "payment_options": "banktransfer" if bank_transfer_only else "card,banktransfer,ussd"})
         return Checkout(self.name, reference, data["link"])
 
     def verify(self, reference: str) -> Payment:
@@ -40,7 +42,9 @@ class Flutterwave:
         status = {"successful": "success", "failed": "failed", "cancelled": "failed"}.get(data.get("status"), "pending")
         if data.get("currency", "NGN") != "NGN":
             status = "failed"
-        return Payment(status, _kobo(data.get("amount")), data.get("payment_type"), _kobo(data.get("app_fee")))
+        meta = data.get("meta") or {}                # bank transfers: originatorname / bankname / originatoraccountnumber
+        return Payment(status, _kobo(data.get("amount")), data.get("payment_type"), _kobo(data.get("app_fee")),
+                       meta.get("originatorname"), meta.get("bankname"), meta.get("originatoraccountnumber"))
 
     def parse_webhook(self, raw: bytes, headers) -> WebhookEvent:
         if not self.webhook_hash or not hmac.compare_digest(self.webhook_hash, headers.get("verif-hash", "")):

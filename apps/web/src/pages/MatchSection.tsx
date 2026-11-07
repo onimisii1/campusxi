@@ -4,7 +4,7 @@ import ContestCard from '../components/ContestCard'
 import JoinContestSheet from '../components/JoinContestSheet'
 import MyBetRow, { type MyBet } from '../components/MyBetRow'
 import { openFor, type Contest } from '../contests'
-import { naira, newIdempotencyKey, payLine, split, useWallet } from '../money'
+import { naira, newIdempotencyKey, paidGate, payLine, split, useWallet } from '../money'
 import PageHeader from '../components/PageHeader'
 import Shirt from '../components/Shirt'
 import TeamBadge from '../components/TeamBadge'
@@ -305,7 +305,8 @@ function ChallengesTab({ match }: { match: Match }) {
   const [slice, setSlice] = useState<Record<string, string>>({})
   const toast = useToast()
   const myHere = (mine ?? []).filter((b) => b.match.id === match.id)
-  const paid = !!w?.paid_play_enabled && w.kyc_status === 'verified'
+  const paid = !!w?.paid_play_enabled && w.can_play_paid
+  const gate = w && w.paid_play_enabled ? paidGate(w) : null
   const resultBets = paid && !!w?.result_bets_enabled
 
   const refresh = () => { reloadBoard(); reloadMine(); reloadWallet() }
@@ -372,8 +373,12 @@ function ChallengesTab({ match }: { match: Match }) {
       <p className="muted">Head-to-head: your team against someone else's, {paid
         ? 'for bragging rights or a stake (10% commission on winnings).' : 'for bragging rights.'}</p>
       {status === 'signed_out' && <NeedSignIn what="challenge other fans" />}
-      {status === 'ready' && w && w.paid_play_enabled && w.kyc_status !== 'verified' && (
-        <a className="notice block-link" href="#/verify">🪪 Verify your ID to play challenges for cash →</a>
+      {status === 'ready' && gate && <a className="notice block-link" href={gate.href}>{gate.text}</a>}
+      {status === 'ready' && !match.locked && (
+        <a className="swipe-promo" href={`#/swipe/${match.id}`}>
+          <span><b>Swipe to match</b><small>Flick through this match's open challenges</small></span>
+          <span className="swipe-promo-icon" aria-hidden>⚡</span>
+        </a>
       )}
       {status === 'ready' && !match.locked && (
         teams && teams.length > 0 ? (

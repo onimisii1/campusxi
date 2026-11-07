@@ -27,7 +27,11 @@ export default function MyChallenges() {
     <section>
       <PageHeader title="My challenges" back="#/me" />
       <p className="muted">Record: {won}W {lost}L {tied}T</p>
-      {data?.length === 0 && <p className="muted">No challenges yet. Open a match and challenge someone.</p>}
+      <a className="swipe-promo" href="#/swipe">
+        <span><b>Swipe to match</b><small>Right to take on a fan's challenge, left to skip</small></span>
+        <span className="swipe-promo-icon" aria-hidden>⚡</span>
+      </a>
+      {data?.length === 0 && <p className="muted">No challenges yet. Swipe through open ones, or open a match and post your own.</p>}
       <ul className="plain">{data?.map((b) => <MyBetRow key={b.id} b={b} onCancel={cancel} showMatch />)}</ul>
     </section>
   )

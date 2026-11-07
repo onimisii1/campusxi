@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     bonus_max_share_bps: int = 5000                # coins can pay at most 50% of an entry or stake
     bonus_expiry_days: int = 90
     payout_hold_hours: int = 24                    # prizes wait out the dispute window
+    # KYC is optional until a provider is live (Nov 2026). Meanwhile, SportyBet-style: players tick 18+,
+    # give their full name as on their bank account, deposit by bank transfer, and withdraw only to a
+    # bank account in that name that has funded the wallet. KYC_REQUIRED=true restores ID checks.
+    kyc_required: bool = False
     # KYC: "stub" in test mode; a real provider (Dojah, Prembly, ...) plugs into app/kyc.
     kyc_provider: str = "stub"
     kyc_pepper: str = "dev-only-pepper"            # hashes NIN/BVN so one identity can't verify two accounts

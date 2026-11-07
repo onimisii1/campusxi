@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import PageHeader from '../components/PageHeader'
 import Skeleton from '../components/Skeleton'
-import { naira, newIdempotencyKey, useWallet } from '../money'
+import { naira, newIdempotencyKey, useWallet, type Wallet } from '../money'
 import { signInThenReturn } from '../router'
 import { useSession } from '../session'
 import { useToast } from '../toast'
@@ -37,9 +37,9 @@ export default function WalletPage() {
           {w.held_kobo > 0 && <span>In play {naira(w.held_kobo)}</span>}
         </div>
       </div>
-      {w.kyc_status !== 'verified' && (
+      {w.kyc_required ? w.kyc_status !== 'verified' && (
         <a className="notice block-link" href="#/verify">🪪 Verify your ID (NIN or BVN) to add money and play for cash →</a>
-      )}
+      ) : <StartChecks w={w} onDone={reload} />}
       {w.limits.self_excluded_until && (
         <p className="notice">You're on a break from paid play until {new Date(w.limits.self_excluded_until).toLocaleDateString()}.
           You can still withdraw.</p>
@@ -49,8 +49,10 @@ export default function WalletPage() {
           <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'tab on' : 'tab'} onClick={() => setTab(t)}>{t}</button>
         ))}
       </div>
-      {tab === 'Add money' && <Deposit minimum={w.min_deposit_kobo} disabled={w.kyc_status !== 'verified'} />}
-      {tab === 'Withdraw' && <Withdraw cash={w.cash_kobo} minimum={w.min_withdrawal_kobo} verified={w.kyc_status === 'verified'} onDone={reload} />}
+      {tab === 'Add money' && <Deposit minimum={w.min_deposit_kobo} disabled={!w.can_play_paid} transferOnly={!w.kyc_required} />}
+      {tab === 'Withdraw' && <Withdraw cash={w.cash_kobo} minimum={w.min_withdrawal_kobo}
+        verified={w.kyc_required ? w.kyc_status === 'verified' : !!w.legal_name}
+        legalName={w.kyc_required ? null : w.legal_name} onDone={reload} />}
       {tab === 'History' && <History />}
       <ul className="menu-list">
         <li><a href="#/refer">Invite friends, earn coins <span aria-hidden>→</span></a></li>
@@ -62,7 +64,61 @@ export default function WalletPage() {
   )
 }
 
-function Deposit({ minimum, disabled }: { minimum: number; disabled: boolean }) {
+/** KYC optional for now (SportyBet-style): tick 18+, and give the full name your bank account is in. */
+function StartChecks({ w, onDone }: { w: Wallet; onDone: () => void }) {
+  const { token } = useSession()
+  const toast = useToast()
+  const [ticked, setTicked] = useState(false)
+  const [name, setName] = useState(w.legal_name ?? '')
+  const [editing, setEditing] = useState(!w.legal_name)
+  const run = async (fn: () => Promise<unknown>, done: string) => {
+    try {
+      await fn()
+      toast(done)
+      onDone()
+    } catch (e) {
+      toast(errorText(e), 'bad')
+    }
+  }
+  if (w.adult_confirmed && w.legal_name && !editing) {
+    return (
+      <div className="glass-card row between start-checks done">
+        <span className="small"><span className="muted">Bank accounts must be in the name</span><b className="block">{w.legal_name}</b></span>
+        {w.legal_name_locked
+          ? <span className="small muted">Locked · ask support to change</span>
+          : <button className="link" onClick={() => setEditing(true)}>Change</button>}
+      </div>
+    )
+  }
+  return (
+    <div className="glass-card start-checks">
+      <strong>Before you play for cash</strong>
+      {!w.adult_confirmed && (
+        <>
+          <label className="inline"><input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} />
+            I'm 18 or older, and I'll only play with my own money</label>
+          <button className="primary" disabled={!ticked}
+            onClick={() => run(() => api('/me/confirm-18', token, { method: 'POST', body: { confirm: true } }), 'Thanks: paid play is open')}>
+            Confirm</button>
+        </>
+      )}
+      {(editing || !w.legal_name) && (
+        <>
+          <label>Full name, as on your bank account
+            <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="e.g. Chioma Ada Obi" /></label>
+          <p className="muted small">Withdrawals only go to a bank account in this name that you've paid in from.</p>
+          <button className="sheet-btn" disabled={name.trim().split(/\s+/).length < 2}
+            onClick={() => run(async () => {
+              await api('/me/legal-name', token, { method: 'PUT', body: { legal_name: name } })
+              setEditing(false)
+            }, 'Name saved')}>Save name</button>
+        </>
+      )}
+    </div>
+  )
+}
+
+function Deposit({ minimum, disabled, transferOnly }: { minimum: number; disabled: boolean; transferOnly: boolean }) {
   const { token } = useSession()
   const toast = useToast()
   const [amount, setAmount] = useState(200_000)
@@ -95,12 +151,16 @@ function Deposit({ minimum, disabled }: { minimum: number; disabled: boolean }) 
       </label>
       <button className="primary" disabled={disabled || busy || amount < minimum} onClick={go}>
         {busy ? 'Opening checkout…' : `Add ${naira(amount)}`}</button>
-      <p className="muted small">Card, bank transfer or USSD through Paystack (Flutterwave if Paystack is down). Minimum {naira(minimum)}.</p>
+      <p className="muted small">{transferOnly
+        ? <>Bank transfer only for now: pay from <b>your own</b> bank account. That's the account your winnings go back to.</>
+        : 'Card, bank transfer or USSD through Paystack (Flutterwave if Paystack is down).'} Minimum {naira(minimum)}.</p>
     </div>
   )
 }
 
-function Withdraw({ cash, minimum, verified, onDone }: { cash: number; minimum: number; verified: boolean; onDone: () => void }) {
+function Withdraw({ cash, minimum, verified, legalName, onDone }: {
+  cash: number; minimum: number; verified: boolean; legalName: string | null; onDone: () => void
+}) {
   const { token } = useSession()
   const toast = useToast()
   const { data: accounts, reload } = useApi<BankAccount[]>('/me/bank-accounts')
@@ -126,9 +186,14 @@ function Withdraw({ cash, minimum, verified, onDone }: { cash: number; minimum: 
     }
   }
 
-  if (!verified) return <p className="muted">Verify your ID first: withdrawals go only to an account in your own name.</p>
+  if (!verified) {
+    return <p className="muted">{legalName === null && 'Verify your ID first: withdrawals go only to an account in your own name.'}
+      {legalName !== null && 'Add your full name above first: withdrawals go only to an account in that name.'}</p>
+  }
   return (
     <div>
+      {legalName && <p className="small muted">Winnings go back only to a bank account in the name <b>{legalName}</b> that
+        you've paid in from by bank transfer.</p>}
       <div className="glass-card">
         {accounts?.length ? (
           <label>To

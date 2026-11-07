@@ -81,6 +81,8 @@ def client(db_url, monkeypatch):
     monkeypatch.setattr(settings, "database_url", db_url)
     monkeypatch.setattr(settings, "supabase_jwt_secret", JWT_SECRET)
     monkeypatch.setattr(settings, "rate_limit_enabled", False)   # test_backend.py turns it back on
+    # Most money tests cover the ID-check mode; test_no_kyc.py turns this off (the live default for now).
+    monkeypatch.setattr(settings, "kyc_required", True)
     clock = Clock(NOW)
     app.dependency_overrides[utcnow] = clock
     with TestClient(app) as c:

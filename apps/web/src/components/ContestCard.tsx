@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { feeLabel, joinable, naira, type Contest, type TeamOption } from '../contests'
-import { newIdempotencyKey, payLine, split, useWallet } from '../money'
+import { newIdempotencyKey, paidGate, payLine, split, useWallet } from '../money'
 import { signInThenReturn } from '../router'
 import { useSession } from '../session'
 import { useToast } from '../toast'
@@ -98,8 +98,8 @@ function JoinSheet({ contest: c, matchId, teams, onClose, onJoined }: {
         )}
         <a className="sheet-btn" href={`#/build/${matchId}`}>+ Build a new team</a>
         {fee > 0 && w && (
-          w.kyc_status !== 'verified'
-            ? <a className="notice block-link" href="#/verify">🪪 Verify your ID to play for cash →</a>
+          paidGate(w)
+            ? <a className="notice block-link" href={paidGate(w)!.href}>{paidGate(w)!.text}</a>
             : short > 0
               ? <a className="notice block-link" href="#/wallet">You need {naira(short)} more · Add money →</a>
               : <p className="small muted">Pays {payLine(w, fee)}. Prizes are paid in cash 24h after the result.</p>

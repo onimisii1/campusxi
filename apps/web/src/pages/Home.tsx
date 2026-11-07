@@ -46,6 +46,8 @@ export default function Home() {
           </div>
         </>
       )}
+      <SwipePromo />
+
 
       {upcoming.length > 1 && <div className="section-head"><h3>Up next</h3></div>}
       <ul className="list">{upcoming.slice(1).map((m) => <li key={m.id}><ScoreCard m={m} /></li>)}</ul>
@@ -62,6 +64,20 @@ export default function Home() {
         ))}
       </ul>
     </section>
+  )
+}
+
+/** "Swipe to match" teaser: how many open challenges are waiting (signed-in players only). */
+function SwipePromo() {
+  const { status } = useSession()
+  const { data } = useApi<{ cards: unknown[] }>(status === 'ready' ? '/bets/feed' : null, 60_000)
+  if (!data || data.cards.length === 0) return null
+  const n = data.cards.length
+  return (
+    <a className="swipe-promo" href="#/swipe">
+      <span><b>{n} open challenge{n === 1 ? '' : 's'}</b><small>Swipe right to take one on</small></span>
+      <span className="swipe-promo-icon" aria-hidden>⚡</span>
+    </a>
   )
 }
 

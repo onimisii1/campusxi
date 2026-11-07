@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { feeLabel, type Contest } from '../contests'
-import { naira, newIdempotencyKey, payLine, split, useWallet } from '../money'
+import { naira, newIdempotencyKey, paidGate, payLine, split, useWallet } from '../money'
 import { useSession } from '../session'
 import { useToast } from '../toast'
 import { errorText } from '../useApi'
@@ -38,7 +38,8 @@ export default function JoinContestSheet({ teamLabel, teamId, contests, fresh, o
         <ul className="plain join-list">
           {contests.map((c) => {
             const fee = c.late_join ? c.late_join.entry_fee_kobo : c.entry_fee_kobo
-            const unverified = fee > 0 && w?.kyc_status !== 'verified'
+            const gate = fee > 0 && w ? paidGate(w) : null
+            const unverified = fee > 0 && (!w || !!gate)
             const short = fee > 0 && w ? split(w, fee).short : 0
             return (
               <li key={c.id} className="row between">
@@ -49,7 +50,7 @@ export default function JoinContestSheet({ teamLabel, teamId, contests, fresh, o
                     {c.late_join ? ` · late until ${c.late_join.until_minute}′` : ''}
                   </span>
                   {fee > 0 && w && (unverified
-                    ? <a className="small block" href="#/verify">Verify your ID to play for cash →</a>
+                    ? <a className="small block" href={gate?.href ?? '#/wallet'}>{gate?.text ?? 'Open your wallet →'}</a>
                     : short > 0
                       ? <a className="small block" href="#/wallet">Need {naira(short)} more · Add money →</a>
                       : <span className="small block">Pays {payLine(w, fee)}</span>)}
