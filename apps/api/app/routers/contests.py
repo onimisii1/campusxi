@@ -110,9 +110,25 @@ def add_contest(match_id: UUID, body: ContestIn, user=Depends(require_admin), co
     return c
 
 
+def ensure_default_paid_contests(conn, m, now) -> None:
+    """While paid play is on, every open match carries the PRD's ₦400 Mini and a ₦1,000 Mega
+    (sizes in settings), so cash play exists without an admin creating contests match by match.
+    Admins can still add more. Serialised per match so two visitors can't create doubles."""
+    if not (settings.paid_play_enabled and settings.auto_paid_contests) or is_locked(m, now):
+        return
+    conn.execute("select pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"default-contests:{m['id']}",))
+    have = {r["entry_fee_kobo"] for r in conn.execute(
+        "select entry_fee_kobo from contests where match_id = %s and entry_fee_kobo > 0", (m["id"],)).fetchall()}
+    for name, fee, capacity in (("₦400 Mini", MINI_FEE, settings.default_mini_capacity),
+                                ("₦1,000 Mega", MIN_STANDARD_FEE, settings.default_mega_capacity)):
+        if fee not in have and capacity:
+            create_paid_contest(conn, m["id"], name, capacity, fee)
+
+
 @router.get("/matches/{match_id}/contests")
 def list_contests(match_id: UUID, user=Depends(optional_user), conn=Depends(get_conn), now=Depends(utcnow)):
     m = load_match(conn, match_id)
+    ensure_default_paid_contests(conn, m, now)
     rows = conn.execute(
         """select c.*, (select count(*) from contest_entries e where e.contest_id = c.id) as entries
            from contests c where c.match_id = %s order by c.entry_fee_kobo, c.created_at""", (match_id,)).fetchall()

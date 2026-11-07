@@ -212,3 +212,19 @@ def test_who_may_not_play_for_money(sw, client, db, monkeypatch):
     # fees are the N400 Mini or N1,000 and up
     assert client.post(f"/admin/matches/{mid}/contests", headers=auth(sw["admin"]), json={
         "name": "Odd", "capacity": 5, "entry_fee_kobo": 50_000}).json()["error"]["code"] == "bad_fee"
+
+
+def test_open_matches_get_a_mini_and_a_mega_automatically(sw, client, db, monkeypatch):
+    mid = sw["match"]["id"]
+    listed = client.get(f"/matches/{mid}/contests").json()
+    paid = sorted((c["name"], c["entry_fee_kobo"], c["capacity"]) for c in listed if c["entry_fee_kobo"])
+    assert paid == [("₦1,000 Mega", 100_000, settings.default_mega_capacity),
+                    ("₦400 Mini", 40_000, settings.default_mini_capacity)]
+    again = client.get(f"/matches/{mid}/contests").json()
+    assert len([c for c in again if c["entry_fee_kobo"]]) == 2          # never doubled
+    monkeypatch.setattr(settings, "paid_play_enabled", False)
+    other = client.post(f"/admin/tournaments/{sw['match']['tournament_id']}/fixtures", headers=auth(sw["admin"]),
+                        content="home_team,away_team,scheduled_start,venue\nLaw,Engineering,2026-11-20T15:00:00+00:00,Main\n")
+    assert other.status_code < 300, other.text
+    later = next(m for m in client.get("/matches").json() if m["id"] != mid)
+    assert all(c["entry_fee_kobo"] == 0 for c in client.get(f"/matches/{later['id']}/contests").json())

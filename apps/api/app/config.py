@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     paid_play_enabled: bool = False
     # Match-result bets are sports betting: off until a sports-betting licence is held.
     result_bets_enabled: bool = False
+    # While paid play is on, every open match automatically gets a ₦400 Mini and a ₦1,000 Mega with
+    # these many spots (0 skips one); admins can still add more contests by hand.
+    auto_paid_contests: bool = True
+    default_mini_capacity: int = 20
+    default_mega_capacity: int = 50
     # ---- money (all integer kobo) ----
     min_deposit_kobo: int = 10_000                 # N100
     daily_deposit_limit_kobo: int = 5_000_000      # N50,000 a day unless the user sets lower

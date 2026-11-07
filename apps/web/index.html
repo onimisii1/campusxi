@@ -6,17 +6,26 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#000000" />
+    <!-- Android Chrome paints the status bar this colour. Not pure black: some Android skins pick
+         dark clock/battery icons on #000, which then vanish. -->
+    <meta name="theme-color" content="#141414" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <!-- black-translucent: white clock/battery over our black page (plain "black" shows dark text
-         on newer iPhones, which vanishes on a black app); the page pads itself below the bar -->
+    <!-- iPhone home-screen app: white clock/battery over the black page (the page pads itself below) -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="color-scheme" content="dark" />
     <meta name="apple-mobile-web-app-title" content="CampusXI" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,300;1,600;1,700&display=swap" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Edge-to-edge (viewport-fit=cover) only for the iPhone home-screen app, where the translucent
+      // status bar needs it. On Android it lets Chrome draw the page under a see-through status bar.
+      if (navigator.standalone === true) {
+        document.querySelector('meta[name="viewport"]').setAttribute('content',
+          'width=device-width, initial-scale=1.0, viewport-fit=cover')
+      }
+    </script>
     <title>CampusXI</title>
   </head>
   <body>
