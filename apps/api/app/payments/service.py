@@ -91,11 +91,19 @@ def _words(s: str | None) -> set:
             if len(w) > 1 and w not in ("BANK", "PLC", "LIMITED", "LTD", "NIGERIA", "MFB", "OF", "THE")}
 
 
-def funding_deposit(conn, user_id, account_number: str, account_name: str) -> dict | None:
-    """The newest successful deposit this bank account paid in (same last four digits, same holder name)."""
-    rows = conn.execute("""select * from deposits where user_id = %s and status = 'success' and payer_account_tail = %s
-                           order by created_at desc""", (user_id, account_tail(account_number))).fetchall()
-    return next((d for d in rows if d["payer_name"] and name_matches(account_name, d["payer_name"])), None)
+def funding_deposit(conn, user_id, account_number: str, account_name: str, bank_name: str | None = None) -> dict | None:
+    """The newest successful deposit this bank account paid in: same last four digits and holder name.
+    Some payers (OPay and other fintechs) arrive with no account number at all; those match on holder
+    name + bank instead, marked weak_match so a person approves every withdrawal to that account."""
+    rows = conn.execute("""select * from deposits where user_id = %s and status = 'success' and payer_name is not null
+                           order by created_at desc""", (user_id,)).fetchall()
+    tail = account_tail(account_number)
+    exact = next((d for d in rows if d["payer_account_tail"] == tail and name_matches(account_name, d["payer_name"])), None)
+    if exact:
+        return exact
+    weak = next((d for d in rows if d["payer_account_tail"] is None and name_matches(account_name, d["payer_name"])
+                 and same_bank(d["payer_bank"], bank_name)), None)
+    return {**weak, "weak_match": True} if weak else None
 
 
 def same_bank(a: str | None, b: str | None) -> bool:
@@ -145,7 +153,7 @@ def add_bank_account(conn, user: dict, bank_code: str, account_number: str) -> d
         raise ApiError(422, "account_not_found", "we couldn't find that account; check the number and bank", errors)
     if not name_matches(name, expected):
         raise ApiError(422, "name_mismatch", f"the account is in the name {name}, which doesn't match your {source}")
-    if not settings.kyc_required and funding_deposit(conn, user["id"], account_number, name) is None:
+    if not settings.kyc_required and funding_deposit(conn, user["id"], account_number, name, bank_name) is None:
         raise ApiError(422, "not_funding_account", "withdrawals only go back to an account you've paid in from: "
                                                    "deposit from this account by bank transfer first")
     row = conn.execute(
@@ -173,10 +181,11 @@ def request_withdrawal(conn, user: dict, amount: int, bank_account_id, now) -> d
                              (user["id"],)).fetchone()
     approval = first or amount > settings.withdrawal_approval_over_kobo
     if not settings.kyc_required:
-        funded = funding_deposit(conn, user["id"], account["account_number"], account["account_name"])
+        funded = funding_deposit(conn, user["id"], account["account_number"], account["account_name"], account["bank_name"])
         if funded is None:
             raise ApiError(422, "not_funding_account", "withdrawals only go back to an account you've paid in from")
-        approval = approval or not same_bank(funded["payer_bank"], account["bank_name"])   # an admin compares
+        # An admin compares when the bank names don't line up, or the payer's account number was never reported.
+        approval = approval or bool(funded.get("weak_match")) or not same_bank(funded["payer_bank"], account["bank_name"])
     w = conn.execute(
         """insert into withdrawals (user_id, amount_kobo, psp_reference, bank_account_id, status, needs_approval,
                                   created_at, updated_at)

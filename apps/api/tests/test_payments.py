@@ -39,7 +39,8 @@ class FakePSPs:
                               "channel": t.get("channel", "card"),
                               "fees": 150, "authorization": t.get("authorization", {})})
             if path == "/bank":
-                return ok_ps([{"code": "058", "name": "GTBank"}, {"code": "044", "name": "Access Bank"}])
+                return ok_ps([{"code": "058", "name": "GTBank"}, {"code": "044", "name": "Access Bank"},
+                              {"code": "999992", "name": "OPay Digital Services Limited (OPay)"}])
             if path == "/bank/resolve":
                 return ok_ps({"account_name": self.account_name})
             if path == "/transferrecipient":

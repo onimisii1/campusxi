@@ -136,3 +136,24 @@ def test_no_payer_name_means_no_bank_name_until_an_admin_sets_it(psp, client, db
     client.post("/me/confirm-18", headers=auth(u), json={"confirm": True})
     _paid_in(client, psp, u, 500_000, {})                     # the provider didn't say who paid
     assert client.get("/me/wallet", headers=auth(u)).json()["legal_name"] is None
+
+
+OPAY = {"sender_name": "OBI ADA CHIOMA", "sender_bank": "OPay Digital Services Limited (OPay)"}     # no account number
+
+
+def test_payer_with_no_account_number_matches_on_name_and_bank_and_always_needs_an_admin(psp, client, db):
+    u = make_user(db, make_school(db), team_name="chioma_fc")
+    client.post("/me/confirm-18", headers=auth(u), json={"confirm": True})
+    _paid_in(client, psp, u, 2_000_000, OPAY)
+    assert db.execute("select payer_account_tail from deposits where user_id = %s", (u,)).fetchone()[
+        "payer_account_tail"] is None
+    add = lambda code: client.post("/me/bank-accounts", headers=auth(u),  # noqa: E731
+                                   json={"bank_code": code, "account_number": "8012345678"}).json()
+    assert add("058")["error"]["code"] == "not_funding_account"                # a different bank
+    acct = add("999992")
+    assert acct["last4"] == "5678"
+    db.execute("""insert into withdrawals (user_id, amount_kobo, psp_reference, status, created_at, updated_at)
+                  values (%s, 1, 'old', 'paid', %s, %s)""", (u, NOW, NOW))        # not a first withdrawal
+    w = client.post("/wallet/withdrawals", headers=auth(u), json={"amount_kobo": 100_000,
+                                                                  "bank_account_id": acct["id"]}).json()
+    assert w["needs_approval"] is True and w["status"] == "awaiting_approval"

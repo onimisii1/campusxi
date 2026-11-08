@@ -21,19 +21,24 @@ def ensure_code(conn, user_id) -> str:
 
 
 def _fresh_funding_account(conn, user_id) -> bool:
-    """KYC optional: the friend has paid in at least the minimum from a bank account (last four digits +
-    holder name) that no other CampusXI player has paid in from, so one person can't farm coins."""
-    from app.payments.service import name_matches
-    mine = conn.execute("""select payer_account_tail, payer_name from deposits where user_id = %s and status = 'success'
-                           and amount_kobo >= %s and payer_account_tail is not null and payer_name is not null""",
+    """KYC optional: the friend has paid in at least the minimum from a bank account that no other
+    CampusXI player has paid in from, so one person can't farm coins. An account is its last four digits
+    + holder name, or holder name + bank when the provider reports no account number (OPay and others)."""
+    from app.payments.service import name_matches, same_bank
+    mine = conn.execute("""select payer_account_tail, payer_name, payer_bank from deposits where user_id = %s
+                           and status = 'success' and amount_kobo >= %s and payer_name is not null""",
                         (user_id, settings.referral_min_deposit_kobo)).fetchall()
-    for d in mine:
-        others = conn.execute("""select payer_name from deposits where user_id <> %s and status = 'success'
-                                 and payer_account_tail = %s and payer_name is not null""",
-                              (user_id, d["payer_account_tail"])).fetchall()
-        if not any(name_matches(o["payer_name"], d["payer_name"]) for o in others):
-            return True
-    return False
+    others = conn.execute("""select payer_account_tail, payer_name, payer_bank from deposits
+                             where user_id <> %s and status = 'success' and payer_name is not null""", (user_id,)).fetchall()
+
+    def same_account(a, b) -> bool:
+        if not name_matches(b["payer_name"], a["payer_name"]):
+            return False
+        if a["payer_account_tail"] and b["payer_account_tail"]:
+            return a["payer_account_tail"] == b["payer_account_tail"]
+        return same_bank(a["payer_bank"], b["payer_bank"])
+
+    return any(not any(same_account(d, o) for o in others) for d in mine)
 
 
 def maybe_reward(conn, user_id, now) -> bool:
